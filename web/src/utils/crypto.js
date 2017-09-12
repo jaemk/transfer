@@ -18,7 +18,9 @@ export const encrypt = (file, iv, pass, callback) => {
           let dataBytes = new Uint8Array(encryptedData)
           dataBytes = Array.from(dataBytes)
 
-          callback(dataBytes)
+          crypt.subtle.digest('SHA-256', data).then(dataHash => {
+            callback(dataBytes, Buffer.from(hash).toString('hex'))
+          })
         })
       })
     })

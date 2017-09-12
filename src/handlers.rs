@@ -95,13 +95,15 @@ fn api_upload(info: Json<UploadInfoPost>) -> Json<JsonValue> {
 #[derive(FromForm)]
 struct UploadId {
     uuid: String,
+    hash: String,
 }
 
 
 #[post("/api/upload?<upload_id>", format = "text/plain", data = "<data>")]
 fn api_upload_file(upload_id: UploadId, data: rocket::Data) -> Json<JsonValue> {
     use std::io::Read;
-    let _uuid = upload_id.uuid;
+    info!("uuid: {}", upload_id.uuid);
+    info!("hash: {}", upload_id.hash);
     let mut buf = String::new();
     data.open().read_to_string(&mut buf).unwrap();
     let bytes = Vec::from_hex(&buf).unwrap();
