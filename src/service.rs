@@ -37,7 +37,7 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
                     handlers::index,
                     handlers::api_hello,
                     handlers::api_bye,
-                    handlers::api_upload,
+                    handlers::api_upload_init,
                     handlers::api_upload_file,
                 ]
             )

@@ -5,7 +5,9 @@ use rocket;
 use rocket::response;
 use rocket::http;
 use rocket_contrib::{Json, Value as JsonValue};
-use hex::FromHex;
+use hex::{FromHex, ToHex};
+use uuid::Uuid;
+use chrono::{Utc, Duration};
 
 
 #[get("/<file..>")]
@@ -37,7 +39,7 @@ fn api_hello() -> Json<JsonValue> {
 
 #[post("/api/bye", data = "<msg>")]
 fn api_bye<'a>(msg: Json<Message>) -> Json<JsonValue> {
-    info!("msg: {}", msg.message);
+    debug!("msg: {}", msg.message);
     Json(json!({"message": "bye!"}))
 }
 
@@ -56,7 +58,7 @@ struct UploadInfo {
     encrypt_password: Vec<u8>,
 }
 impl UploadInfoPost {
-    fn decode(&self) -> Result<UploadInfo, &'static str> {
+    fn decode_hex(&self) -> Result<UploadInfo, &'static str> {
         macro_rules! bytes_from_hex {
             ($hex:expr) => {
                 match Vec::from_hex($hex) {
@@ -78,15 +80,19 @@ impl UploadInfoPost {
 }
 
 #[post("/api/upload/init", data = "<info>")]
-fn api_upload(info: Json<UploadInfoPost>) -> Json<JsonValue> {
-    let info = info.decode().expect("bad upload info");
-    info!("iv: {:?}", info.iv);
-    info!("filename: {:?}", info.filename);
-    info!("access-pass: {:?}", ::std::str::from_utf8(&*info.access_password).unwrap());
-    info!("encrypt-pass: {:?}", ::std::str::from_utf8(&*info.encrypt_password).unwrap());
+fn api_upload_init(info: Json<UploadInfoPost>) -> Json<JsonValue> {
+    let info = info.decode_hex().expect("bad upload info");
+    let uuid = Uuid::new_v4();
+    let uuid_hex = uuid.as_bytes().to_hex();
+    let date_initialized = Utc::now();
+    debug!("date-initialized: {:?}", date_initialized);
+    debug!("iv: {:?}", info.iv);
+    debug!("filename: {:?}", info.filename);
+    debug!("access-pass: {:?}", ::std::str::from_utf8(&*info.access_password).unwrap());
+    debug!("encrypt-pass: {:?}", ::std::str::from_utf8(&*info.encrypt_password).unwrap());
     let resp = json!({
-        "uuid": "1234",
-        "responseUrl": "/response/url/uuid",
+        "uuid": &uuid_hex,
+        "responseUrl": "/api/upload",
     });
     Json(resp)
 }
@@ -99,15 +105,26 @@ struct UploadId {
 }
 
 
+const UPLOAD_TIMEOUT: i64 = 30;  // seconds
+
 #[post("/api/upload?<upload_id>", format = "text/plain", data = "<data>")]
-fn api_upload_file(upload_id: UploadId, data: rocket::Data) -> Json<JsonValue> {
+fn api_upload_file(upload_id: UploadId, data: rocket::Data) -> Result<Json<JsonValue>, &'static str> {
     use std::io::Read;
-    info!("uuid: {}", upload_id.uuid);
-    info!("hash: {}", upload_id.hash);
+    let then = Utc::now();  // replace
+    let now = Utc::now();
+    if now.signed_duration_since(then) > Duration::seconds(UPLOAD_TIMEOUT) {
+        error!("Upload request came too late");
+        return Err("Upload request came to late");
+    }
+    debug!("uuid-hex: {}", upload_id.uuid);
+    debug!("hash-hex: {}", upload_id.hash);
+
+    // update this to just stream directly to file
     let mut buf = String::new();
     data.open().read_to_string(&mut buf).unwrap();
     let bytes = Vec::from_hex(&buf).unwrap();
-    println!("{:?}", bytes);
+    debug!("{:?}", bytes);
+
     let resp = json!({"ok": "ok"});
-    Json(resp)
+    Ok(Json(resp))
 }
