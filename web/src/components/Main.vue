@@ -87,10 +87,12 @@ export default {
       console.log(`Hex: ${ivHex} - ${accessHex} - ${encryptHex}`)
 
       const encryptUploadFile = (uuid) => {
-        console.log(`uuid: ${uuid}`)
+        console.log(`uuid-hex: ${uuid}`)
         const uploadBytes = (bytes, hash) => {
           console.log(bytes)
-          axios.post(`/api/upload?uuid=${uuid}&hash=${hash}`, Buffer.from(bytes).toString('hex'), {headers: {'content-type': 'text/plain'}})
+          let bytesHex = Buffer.from(bytes).toString('hex')
+          let hashHex = Buffer.from(hash).toString('hex')
+          axios.post(`/api/upload?uuid=${uuid}&hash=${hashHex}`, bytesHex, {headers: {'content-type': 'text/plain'}})
             .then(resp => console.log(resp.data))
         }
         encrypt(file, iv, encryptBytes, uploadBytes)

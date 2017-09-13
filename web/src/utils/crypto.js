@@ -19,7 +19,7 @@ export const encrypt = (file, iv, pass, callback) => {
           dataBytes = Array.from(dataBytes)
 
           crypt.subtle.digest('SHA-256', data).then(dataHash => {
-            callback(dataBytes, Buffer.from(hash).toString('hex'))
+            callback(dataBytes, hash)
           })
         })
       })
