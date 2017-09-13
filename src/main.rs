@@ -11,6 +11,11 @@ extern crate rocket;
 extern crate env_logger;
 extern crate chrono;
 extern crate hex;
+extern crate uuid;
+extern crate r2d2;
+extern crate r2d2_postgres;
+extern crate postgres;
+extern crate migrant_lib;
 
 mod service;
 mod handlers;
