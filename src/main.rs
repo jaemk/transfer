@@ -55,7 +55,10 @@ fn run() -> Result<()> {
                          .help("Serve on '0.0.0.0' instead of 'localhost'"))
                     .arg(Arg::with_name("log")
                          .long("log")
-                         .help("Output logging info. Shortcut for settings env-var LOG=info"))
+                         .help("Output logging info. Shortcut for setting env-var LOG=info"))
+                    .arg(Arg::with_name("debug")
+                         .long("debug")
+                         .help("Output debug logging info. Shortcut for setting env-var LOG=debug"))
                     .arg(Arg::with_name("workers")
                          .long("workers")
                          .short("w")
@@ -64,10 +67,11 @@ fn run() -> Result<()> {
         .get_matches();
 
     if let Some(serve_matches) = matches.subcommand_matches("serve") {
-        let log = serve_matches.is_present("log");
-        if log {
-            env::set_var("LOG", "info");
-        }
+        let log_info = serve_matches.is_present("log");
+        let log_debug = serve_matches.is_present("debug");
+        if log_info { env::set_var("LOG", "info"); }
+        if log_debug { env::set_var("LOG", "debug"); }
+        let log = if log_info || log_debug { true } else { false };
         let port = serve_matches.value_of("port").unwrap_or("3000").parse::<u16>().chain_err(|| "`--port` expects an integer")?;
         let host = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
         let workers = serve_matches.value_of("workers").unwrap_or("0").parse::<u16>().chain_err(|| "`--workers` expects an integer")?;
