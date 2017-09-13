@@ -6,6 +6,7 @@ use rocket;
 use rocket::config::{Config, LoggingLevel};
 
 use handlers;
+use db;
 use errors::*;
 
 
@@ -31,6 +32,7 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
     if workers > 0 { config.set_workers(workers); }
     if log { config.set_log_level(LoggingLevel::Normal); }
     rocket::custom(config, log)
+        .manage(db::init_pool())
         .mount("/static/",  routes![handlers::static_files])
         .mount("/",
                 routes![

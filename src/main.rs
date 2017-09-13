@@ -19,6 +19,8 @@ extern crate migrant_lib;
 
 mod service;
 mod handlers;
+mod db;
+mod models;
 
 use std::env;
 use clap::{Arg, App, SubCommand};
