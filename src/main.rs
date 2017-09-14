@@ -16,22 +16,50 @@ extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate postgres;
 extern crate migrant_lib;
+extern crate ring;
+extern crate crypto;
 
+#[macro_use] mod macros;
 mod service;
 mod handlers;
 mod db;
 mod models;
+mod auth;
 
 use std::env;
+use std::path::PathBuf;
 use clap::{Arg, App, SubCommand};
 
 mod errors {
     use super::*;
     error_chain! {
         foreign_links {
+            Io(std::io::Error);
             LogInit(log::SetLoggerError) #[doc = "Error initializing env_logger"];
             ParseInt(std::num::ParseIntError);
+            Uuid(uuid::ParseError);
+            Hex(hex::FromHexError);
             RocketConfig(rocket::config::ConfigError) #[doc = "Error finalizing rocket config"];
+            Postgres(postgres::error::Error);
+            RingUnspecified(ring::error::Unspecified);
+        }
+        errors {
+            DoesNotExist(s: String) {
+                description("Query result does not exist")
+                display("DoesNotExist Error: {}", s)
+            }
+            MultipleRecords(s: String) {
+                description("Query returned multiple records, expected one")
+                display("MultipleRecords Error: {}", s)
+            }
+            InvalidHashArgs(s: String) {
+                description("Hash arguments have invalid number of bytes")
+                display("InvalidHashArgs Error: {}", s)
+            }
+            PathRepr(p: PathBuf) {
+                description("Unable to convert Path to String")
+                display("PathRepr Error: Unable to convert Path to String: {:?}", p)
+            }
         }
     }
 }

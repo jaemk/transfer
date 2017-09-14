@@ -7,7 +7,11 @@ use rocket::http;
 use rocket_contrib::{Json, Value as JsonValue};
 use hex::{FromHex, ToHex};
 use uuid::Uuid;
-use chrono::{Utc, Duration};
+//use chrono::{Utc, Duration};
+
+use db;
+use models;
+use errors::*;
 
 
 #[get("/<file..>")]
@@ -47,59 +51,53 @@ fn api_bye<'a>(msg: Json<Message>) -> Json<JsonValue> {
 #[derive(Deserialize)]
 struct UploadInfoPost {
     iv: String,
-    filename: String,
+    file_name: String,
     access_password: String,
     encrypt_password: String,
 }
 struct UploadInfo {
     iv: Vec<u8>,
-    filename: String,
+    file_name: String,
     access_password: Vec<u8>,
     encrypt_password: Vec<u8>,
 }
 impl UploadInfoPost {
-    fn decode_hex(&self) -> Result<UploadInfo, &'static str> {
-        macro_rules! bytes_from_hex {
-            ($hex:expr) => {
-                match Vec::from_hex($hex) {
-                    Ok(bytes) => bytes,
-                    Err(e) => {
-                        error!("Failed decoding initialization vector: {}", e);
-                        return Err("Failed parsing init vec");
-                    }
-                }
-            }
-        }
+    fn decode_hex(&self) -> Result<UploadInfo> {
         Ok(UploadInfo {
-            iv: bytes_from_hex!(&self.iv),
-            filename: self.filename.to_owned(),
-            access_password: bytes_from_hex!(&self.access_password),
-            encrypt_password: bytes_from_hex!(&self.encrypt_password),
+            iv: Vec::from_hex(&self.iv)?,
+            file_name: self.file_name.to_owned(),
+            access_password: Vec::from_hex(&self.access_password)?,
+            encrypt_password: Vec::from_hex(&self.encrypt_password)?,
         })
     }
 }
 
 #[post("/api/upload/init", data = "<info>")]
-fn api_upload_init(info: Json<UploadInfoPost>) -> Json<JsonValue> {
+fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let info = info.decode_hex().expect("bad upload info");
     let uuid = Uuid::new_v4();
     let uuid_hex = uuid.as_bytes().to_hex();
-    let date_initialized = Utc::now();
-    debug!("date-initialized: {:?}", date_initialized);
-    debug!("iv: {:?}", info.iv);
-    debug!("filename: {:?}", info.filename);
-    debug!("access-pass: {:?}", ::std::str::from_utf8(&*info.access_password).unwrap());
-    debug!("encrypt-pass: {:?}", ::std::str::from_utf8(&*info.encrypt_password).unwrap());
+
+    let access_auth = models::NewAuth::from_bytes(&info.access_password)?.insert(&**conn)?;
+    let encrypt_auth = models::NewAuth::from_bytes(&info.encrypt_password)?.insert(&**conn)?;
+    let new_init_upload = models::NewInitUpload {
+        uuid: uuid,
+        file_name: info.file_name,
+        access_password: access_auth.id,
+        encrypt_password: encrypt_auth.id,
+    };
+    let new_init_upload = new_init_upload.insert(&**conn)?;
+
     let resp = json!({
         "uuid": &uuid_hex,
         "responseUrl": "/api/upload",
     });
-    Json(resp)
+    Ok(Json(resp))
 }
 
 
 #[derive(FromForm)]
-struct UploadId {
+struct UploadId{
     uuid: String,
     hash: String,
 }
@@ -107,23 +105,25 @@ struct UploadId {
 
 const UPLOAD_TIMEOUT: i64 = 30;  // seconds
 
-#[post("/api/upload?<upload_id>", format = "text/plain", data = "<data>")]
-fn api_upload_file(upload_id: UploadId, data: rocket::Data) -> Result<Json<JsonValue>, &'static str> {
-    use std::io::Read;
-    let then = Utc::now();  // replace
-    let now = Utc::now();
-    if now.signed_duration_since(then) > Duration::seconds(UPLOAD_TIMEOUT) {
-        error!("Upload request came too late");
-        return Err("Upload request came to late");
-    }
-    debug!("uuid-hex: {}", upload_id.uuid);
-    debug!("hash-hex: {}", upload_id.hash);
+#[post("/api/upload?<upload_info>", format = "text/plain", data = "<data>")]
+fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) -> Result<Json<JsonValue>> {
+    use std::str::FromStr;
+    let trans = conn.transaction()?;
+    let uuid = Uuid::from_str(&upload_info.uuid)?;
+    let file_path = models::Upload::new_file_path(&uuid)?;
+    let init_upload = models::InitUpload::find(&trans, &uuid)?;
+    assert_eq!(init_upload.delete(&trans)?, 1);
+    // assert within timespan
+    //let now = Utc::now();
+    //if now.signed_duration_since(then) > Duration::seconds(UPLOAD_TIMEOUT) {
+    //    error!("Upload request came too late");
+    //    bail!("Upload request came to late");
+    //}
+    let hash_hex = Vec::from_hex(upload_info.hash)?;
+    let new_upload = init_upload.into_upload(hash_hex, &file_path)?;
+    let upload = new_upload.insert(&trans)?;
 
-    // update this to just stream directly to file
-    let mut buf = String::new();
-    data.open().read_to_string(&mut buf).unwrap();
-    let bytes = Vec::from_hex(&buf).unwrap();
-    debug!("{:?}", bytes);
+    data.stream_to_file(&file_path)?;
 
     let resp = json!({"ok": "ok"});
     Ok(Json(resp))
