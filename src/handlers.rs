@@ -53,13 +53,11 @@ struct UploadInfoPost {
     iv: String,
     file_name: String,
     access_password: String,
-    encrypt_password: String,
 }
 struct UploadInfo {
     iv: Vec<u8>,
     file_name: String,
     access_password: Vec<u8>,
-    encrypt_password: Vec<u8>,
 }
 impl UploadInfoPost {
     fn decode_hex(&self) -> Result<UploadInfo> {
@@ -67,7 +65,6 @@ impl UploadInfoPost {
             iv: Vec::from_hex(&self.iv)?,
             file_name: self.file_name.to_owned(),
             access_password: Vec::from_hex(&self.access_password)?,
-            encrypt_password: Vec::from_hex(&self.encrypt_password)?,
         })
     }
 }
@@ -79,12 +76,11 @@ fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<
     let uuid_hex = uuid.as_bytes().to_hex();
 
     let access_auth = models::NewAuth::from_bytes(&info.access_password)?.insert(&**conn)?;
-    let encrypt_auth = models::NewAuth::from_bytes(&info.encrypt_password)?.insert(&**conn)?;
     let new_init_upload = models::NewInitUpload {
         uuid: uuid,
         file_name: info.file_name,
+        iv: info.iv,
         access_password: access_auth.id,
-        encrypt_password: encrypt_auth.id,
     };
     let new_init_upload = new_init_upload.insert(&**conn)?;
 
@@ -112,7 +108,8 @@ fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) 
     let uuid = Uuid::from_str(&upload_info.uuid)?;
     let file_path = models::Upload::new_file_path(&uuid)?;
     let init_upload = models::InitUpload::find(&trans, &uuid)?;
-    assert_eq!(init_upload.delete(&trans)?, 1);
+    init_upload.delete(&trans)?;
+    info!("deleted");
     // assert within timespan
     //let now = Utc::now();
     //if now.signed_duration_since(then) > Duration::seconds(UPLOAD_TIMEOUT) {
@@ -122,6 +119,8 @@ fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) 
     let hash_hex = Vec::from_hex(upload_info.hash)?;
     let new_upload = init_upload.into_upload(hash_hex, &file_path)?;
     let upload = new_upload.insert(&trans)?;
+    info!("created");
+    trans.finish()?;
 
     data.stream_to_file(&file_path)?;
 

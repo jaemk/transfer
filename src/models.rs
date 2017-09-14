@@ -76,18 +76,18 @@ impl Auth {
 pub struct NewInitUpload {
     pub uuid: Uuid,
     pub file_name: String,
+    pub iv: Vec<u8>,
     pub access_password: i32,
-    pub encrypt_password: i32,
 }
 impl NewInitUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<InitUpload> {
-        let stmt = "insert into init_upload (uuid_, file_name, access_password, encrypt_password) values ($1, $2, $3, $4) \
+        let stmt = "insert into init_upload (uuid_, file_name, iv, access_password) values ($1, $2, $3, $4) \
                     returning id, date_created";
-        try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name, &self.access_password, &self.encrypt_password]);
+        try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name, &self.iv, &self.access_password]);
                             InitUpload;
                             id: 0, date_created: 1;
                             uuid: self.uuid, file_name: self.file_name,
-                            access_password: self.access_password, encrypt_password: self.encrypt_password)
+                            iv: self.iv, access_password: self.access_password)
     }
 }
 
@@ -96,8 +96,8 @@ pub struct InitUpload {
     pub id: i32,
     pub uuid: Uuid,
     pub file_name: String,
+    pub iv: Vec<u8>,
     pub access_password: i32,
-    pub encrypt_password: i32,
     pub date_created: DateTime<Utc>,
 }
 impl FromRow for InitUpload {
@@ -109,15 +109,15 @@ impl FromRow for InitUpload {
             id:                 row.get(0),
             uuid:               row.get(1),
             file_name:          row.get(2),
-            access_password:    row.get(3),
-            encrypt_password:   row.get(4),
+            iv:                 row.get(3),
+            access_password:    row.get(4),
             date_created:       row.get(5),
         }
     }
 }
 impl InitUpload {
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
-        let stmt = "select id, uuid_, file_name, access_password, encrypt_password, date_created \
+        let stmt = "select id, uuid_, file_name, iv, access_password, date_created \
                     from init_upload \
                     where uuid_ = $1 \
                     limit 1";
@@ -142,8 +142,8 @@ impl InitUpload {
             content_hash: content_hash,
             file_name: self.file_name,
             file_path: pb,
+            iv: self.iv,
             access_password: self.access_password,
-            encrypt_password: self.encrypt_password,
         })
     }
 }
@@ -154,21 +154,20 @@ pub struct NewUpload {
     pub content_hash: Vec<u8>,
     pub file_name: String,
     pub file_path: String,
+    pub iv: Vec<u8>,
     pub access_password: i32,
-    pub encrypt_password: i32,
 }
 impl NewUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<Upload> {
-        let stmt = "insert into upload (uuid_, content_hash, file_name, file_path, access_password, encrypt_password) \
+        let stmt = "insert into upload (uuid_, content_hash, file_name, file_path, iv, access_password) \
                     values ($1, $2, $3, $4, $5, $6) \
                     returning id, date_created";
         try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.file_name,
-                                                &self.file_path, &self.access_password, &self.encrypt_password]);
+                                                &self.file_path, &self.iv, &self.access_password]);
                             Upload;
                             id: 0, date_created: 1;
                             uuid: self.uuid, content_hash: self.content_hash, file_name: self.file_name,
-                            file_path: self.file_path, access_password: self.access_password,
-                            encrypt_password: self.encrypt_password)
+                            file_path: self.file_path, iv: self.iv, access_password: self.access_password)
     }
 }
 
@@ -179,8 +178,8 @@ pub struct Upload {
     pub content_hash: Vec<u8>,
     pub file_name: String,
     pub file_path: String,
+    pub iv: Vec<u8>,
     pub access_password: i32,
-    pub encrypt_password: i32,
     pub date_created: DateTime<Utc>,
 }
 impl FromRow for Upload {
@@ -194,8 +193,8 @@ impl FromRow for Upload {
             content_hash:       row.get(2),
             file_name:          row.get(3),
             file_path:          row.get(4),
-            access_password:    row.get(5),
-            encrypt_password:   row.get(6),
+            iv:                 row.get(5),
+            access_password:    row.get(6),
             date_created:       row.get(7),
         }
     }
@@ -209,7 +208,7 @@ impl Upload {
 
     pub fn find<T: GenericConnection>(&self, conn: &T) -> Result<Self> {
         let table_name = Self::table_name();
-        let stmt = "select id, uuid_, content_hash, file_name, file_path, access_password, encrypt_password, date_created \
+        let stmt = "select id, uuid_, content_hash, file_name, file_path, iv, access_password, date_created \
                     from upload \
                     where uuid_ = $1 \
                     limit 1";

@@ -65,8 +65,6 @@ export default {
       let accessBytes = new TextEncoder().encode(this.accessPass)
       let ivHex = Buffer.from(iv).toString('hex')
       let accessHex = Buffer.from(accessBytes).toString('hex')
-      let encryptHex = Buffer.from(encryptBytes).toString('hex')
-      console.log(`Hex: ${ivHex} - ${accessHex} - ${encryptHex}`)
 
       const encryptUploadFile = (uuid, respUrl) => {
         console.log(`uuid-hex: ${uuid}`)
@@ -84,8 +82,7 @@ export default {
         {
           file_name: file.name,
           iv: ivHex,
-          access_password: accessHex,
-          encrypt_password: encryptHex
+          access_password: accessHex
         },
         {headers: {'content-type': 'application/json'}}
       ).then(resp => {
