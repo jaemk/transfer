@@ -1,5 +1,6 @@
 use std::path;
 use std::io;
+use std::fs;
 
 use rocket;
 use rocket::response;
@@ -7,7 +8,7 @@ use rocket::http;
 use rocket_contrib::{Json, Value as JsonValue};
 use hex::{FromHex, ToHex};
 use uuid::Uuid;
-//use chrono::{Utc, Duration};
+use chrono::{Utc, Duration};
 
 use db;
 use models;
@@ -52,11 +53,13 @@ fn api_bye<'a>(msg: Json<Message>) -> Json<JsonValue> {
 struct UploadInfoPost {
     iv: String,
     file_name: String,
+    content_hash: String,
     access_password: String,
 }
 struct UploadInfo {
     iv: Vec<u8>,
     file_name: String,
+    content_hash: Vec<u8>,
     access_password: Vec<u8>,
 }
 impl UploadInfoPost {
@@ -64,6 +67,7 @@ impl UploadInfoPost {
         Ok(UploadInfo {
             iv: Vec::from_hex(&self.iv)?,
             file_name: self.file_name.to_owned(),
+            content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
         })
     }
@@ -79,13 +83,14 @@ fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<
     let new_init_upload = models::NewInitUpload {
         uuid: uuid,
         file_name: info.file_name,
+        content_hash: info.content_hash,
         iv: info.iv,
         access_password: access_auth.id,
     };
-    let new_init_upload = new_init_upload.insert(&**conn)?;
+    new_init_upload.insert(&**conn)?;
 
     let resp = json!({
-        "uuid": &uuid_hex,
+        "key": &uuid_hex,
         "responseUrl": "/api/upload",
     });
     Ok(Json(resp))
@@ -94,8 +99,7 @@ fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<
 
 #[derive(FromForm)]
 struct UploadId{
-    uuid: String,
-    hash: String,
+    key: String,
 }
 
 
@@ -104,26 +108,61 @@ const UPLOAD_TIMEOUT: i64 = 30;  // seconds
 #[post("/api/upload?<upload_info>", format = "text/plain", data = "<data>")]
 fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) -> Result<Json<JsonValue>> {
     use std::str::FromStr;
-    let trans = conn.transaction()?;
-    let uuid = Uuid::from_str(&upload_info.uuid)?;
-    let file_path = models::Upload::new_file_path(&uuid)?;
-    let init_upload = models::InitUpload::find(&trans, &uuid)?;
-    init_upload.delete(&trans)?;
-    info!("deleted");
-    // assert within timespan
-    //let now = Utc::now();
-    //if now.signed_duration_since(then) > Duration::seconds(UPLOAD_TIMEOUT) {
-    //    error!("Upload request came too late");
-    //    bail!("Upload request came to late");
-    //}
-    let hash_hex = Vec::from_hex(upload_info.hash)?;
-    let new_upload = init_upload.into_upload(hash_hex, &file_path)?;
-    let upload = new_upload.insert(&trans)?;
-    info!("created");
-    trans.finish()?;
+    let upload = {
+        let trans = conn.transaction()?;
+        let uuid = Uuid::from_str(&upload_info.key)?;
+        let init_upload = models::InitUpload::find(&trans, &uuid)?;
+        let file_path = models::Upload::new_file_path(&init_upload.uuid)?;
+        init_upload.delete(&trans)?;
+        debug!("Deleted `init_upload` id={}", init_upload.id);
+        // assert within timespan
+        let now = Utc::now();
+        if now.signed_duration_since(init_upload.date_created) > Duration::seconds(UPLOAD_TIMEOUT) {
+            error!("Upload request came too late");
+            bail_fmt!(ErrorKind::BadRequest, "Upload request came to late");
+        }
+        let new_upload = init_upload.into_upload(&file_path)?;
+        let upload = new_upload.insert(&trans)?;
+        debug!("Created `upload` id={}", upload.id);
+        trans.commit()?;
+        upload
+    };
 
-    data.stream_to_file(&file_path)?;
+    data.stream_to_file(&upload.file_path)?;
 
     let resp = json!({"ok": "ok"});
     Ok(Json(resp))
 }
+
+
+#[derive(Deserialize)]
+struct DownloadId {
+    key: String,
+    access_password: String,
+}
+
+
+#[post("/api/download/iv", data = "<download_info>")]
+fn api_download_iv(download_info: Json<DownloadId>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+    let uuid_bytes = Vec::from_hex(&download_info.key)?;
+    let uuid = Uuid::from_bytes(&uuid_bytes)?;
+    let upload = models::Upload::find(&**conn, &uuid)?;
+    let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
+    let access_pass_bytes = Vec::from_hex(&download_info.access_password)?;
+    access_auth.verify(&access_pass_bytes)?;
+    Ok(Json(json!({"iv": upload.iv.as_slice().to_hex()})))
+}
+
+
+#[post("/api/download", data = "<download_info>")]
+fn api_download(download_info: Json<DownloadId>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
+    let uuid_bytes = Vec::from_hex(&download_info.key)?;
+    let uuid = Uuid::from_bytes(&uuid_bytes)?;
+    let upload = models::Upload::find(&**conn, &uuid)?;
+    let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
+    let access_pass_bytes = Vec::from_hex(&download_info.access_password)?;
+    access_auth.verify(&access_pass_bytes)?;
+    let file = fs::File::open(upload.file_path)?;
+    Ok(response::Stream::from(file))
+}
+

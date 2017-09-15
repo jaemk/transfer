@@ -19,18 +19,18 @@ extern crate migrant_lib;
 extern crate ring;
 extern crate crypto;
 
-#[macro_use] mod macros;
-mod service;
-mod handlers;
-mod db;
-mod models;
-mod auth;
+#[macro_use] pub mod macros;
+pub mod service;
+pub mod handlers;
+pub mod db;
+pub mod models;
+pub mod auth;
 
 use std::env;
 use std::path::PathBuf;
 use clap::{Arg, App, SubCommand};
 
-mod errors {
+pub mod errors {
     use super::*;
     error_chain! {
         foreign_links {
@@ -59,6 +59,30 @@ mod errors {
             PathRepr(p: PathBuf) {
                 description("Unable to convert Path to String")
                 display("PathRepr Error: Unable to convert Path to String: {:?}", p)
+            }
+            BadRequest(s: String) {
+                description("Bad request")
+                display("BadRequest: {}", s)
+            }
+            InvalidAuth(inner: ()) {
+                description("Invalid auth")
+                display("InvalidAuth Error")
+            }
+        }
+    }
+
+    impl<'r> rocket::response::Responder<'r> for Error {
+        fn respond_to(self, _: &rocket::request::Request) -> rocket::response::Result<'r> {
+            use ErrorKind::*;
+            match *self.kind() {
+                BadRequest(ref s) => {
+                    let body = json!({"error": s}).to_string();
+                    rocket::Response::build()
+                        .status(rocket::http::Status::BadRequest)
+                        .sized_body(std::io::Cursor::new(body))
+                        .ok()
+                }
+                _ => Err(rocket::http::Status::InternalServerError),
             }
         }
     }

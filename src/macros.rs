@@ -86,21 +86,21 @@ macro_rules! try_insert_to_model {
 ///     try_query_first!(conn.query(stmt, &[&key]), Paste)
 /// }
 /// ```
-macro_rules! try_query_first {
-    ($query:expr, $model:ident) => {
-        match $query {
-            Err(e) => {
-                Err(Error::from(e))
-            }
-            Ok(rows) => {
-                match rows.iter().next() {
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "No rows returned from table: {}", $model::table_name()),
-                    Some(row) => Ok($model::from_row(row)),
-                }
-            }
-        }
-    }
-}
+//macro_rules! try_query_first {
+//    ($query:expr, $model:ident) => {
+//        match $query {
+//            Err(e) => {
+//                Err(Error::from(e))
+//            }
+//            Ok(rows) => {
+//                match rows.iter().next() {
+//                    None => bail_fmt!(ErrorKind::DoesNotExist, "No rows returned from table: {}", $model::table_name()),
+//                    Some(row) => Ok($model::from_row(row)),
+//                }
+//            }
+//        }
+//    }
+//}
 
 
 /// Takes the first row returned and converts it into the
