@@ -37,6 +37,7 @@
 <script>
 import axios from 'axios'
 import {encrypt, randomBytes} from '@/utils/crypto'
+import {logerr} from '@/utils/error'
 
 export default {
   name: 'upload',
@@ -61,35 +62,44 @@ export default {
         return
       }
       let iv = randomBytes(16)
-      let encryptBytes = new TextEncoder().encode(this.encryptPass)
-      let accessBytes = new TextEncoder().encode(this.accessPass)
+      let encryptPassBytes = new TextEncoder().encode(this.encryptPass)
+      let accessPassBytes = new TextEncoder().encode(this.accessPass)
       let ivHex = Buffer.from(iv).toString('hex')
-      let accessHex = Buffer.from(accessBytes).toString('hex')
+      let accessPassHex = Buffer.from(accessPassBytes).toString('hex')
 
-      const encryptUploadFile = (uuid, respUrl) => {
-        console.log(`uuid-hex: ${uuid}`)
-        const uploadBytes = (bytes, hash) => {
+      const encryptUploadData = (data, key, respUrl) => {
+        console.log(`upload key: ${key}`)
+        console.log('freshbytes', data)
+        const uploadBytesCallback = (bytes) => {
           console.log(bytes)
           let bytesHex = Buffer.from(bytes).toString('hex')
-          let hashHex = Buffer.from(hash).toString('hex')
-          axios.post(`${respUrl}?uuid=${uuid}&hash=${hashHex}`, bytesHex, {headers: {'content-type': 'text/plain'}})
-            .then(resp => console.log(resp.data))
+          axios.post(`${respUrl}?key=${key}`, bytesHex, {headers: {'content-type': 'text/plain'}})
+            .then(resp => {
+              console.log(resp.data)
+              console.log(`key: ${key}`)
+            })
         }
-        encrypt(file, iv, encryptBytes, uploadBytes)
+        encrypt(data, iv, encryptPassBytes, uploadBytesCallback)
       }
 
-      axios.post('/api/upload/init',
-        {
-          file_name: file.name,
-          iv: ivHex,
-          access_password: accessHex
-        },
-        {headers: {'content-type': 'application/json'}}
-      ).then(resp => {
-        let uuid = resp.data.uuid
-        let respUrl = resp.data.responseUrl
-        encryptUploadFile(uuid, respUrl)
-      }).catch(e => console.log(e))
+      let reader = new FileReader()
+      reader.onload = (event) => {
+        if (reader.readyState !== 2) {
+          console.log(`read ${event.loaded} bytes`)
+          return
+        }
+        const data = reader.result
+        console.log(`loaded ${data.byteLength} bytes`)
+        window.crypto.subtle.digest('SHA-256', data).then(contentHash => {
+          const contentHashHex = Buffer.from(contentHash).toString('Hex')
+          const params = {file_name: file.name, content_hash: contentHashHex, iv: ivHex, access_password: accessPassHex}
+          const headers = {headers: {'content-type': 'application/json'}}
+          axios.post('/api/upload/init', params, headers).then(resp => {
+            encryptUploadData(data, resp.data.key, resp.data.responseUrl)
+          }).catch(err => logerr(err))
+        }).catch(err => logerr(err))
+      }
+      reader.readAsArrayBuffer(file)
     }
   }
 }
