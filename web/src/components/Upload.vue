@@ -1,12 +1,17 @@
 <template>
   <div class="upload">
+    <h3>
+      Upload
+    </h3>
+    <a v-if="uploaded" :href="downloadUrl">{{downloadUrl}}</a>
+    <router-link v-else to="/download">download</router-link>
     <form id="upload-form" v-on:submit="upload">
       <div class="table-">
         <div class="row-">
           <div class="cell- left">
             Select a file:
           </div>
-          <div class="cell- right">
+          <div class="cell- left">
             <input id="file" type="file"/>
           </div>
         </div>
@@ -14,16 +19,16 @@
           <div class="cell- left">
             Access Password:
           </div>
-          <div class="cell- right">
-            <input id="access-password" v-model="accessPass" type="password"/>
+          <div class="cell- left">
+            <Password confirm=true :updateFunc="(val) => updateField('accessPass', val)" />
           </div>
         </div>
         <div class="row-">
           <div class="cell- left">
             Encryption Password:
           </div>
-          <div class="cell- right">
-            <input id="encrypt-password" v-model="encryptPass" type="password"/>
+          <div class="cell- left">
+            <Password confirm=true :updateFunc="(val) => updateField('encryptPass', val)" />
           </div>
         </div>
         <div cell="row-">
@@ -38,27 +43,40 @@
 import axios from 'axios'
 import {encrypt, randomBytes} from '@/utils/crypto'
 import {logerr} from '@/utils/error'
+import Password from '@/components/Password'
 
 export default {
   name: 'upload',
+  components: {
+    Password
+  },
+
   data () {
     return {
-      message: '',
-      iv: '',
       accessPass: '',
-      encryptPass: ''
+      encryptPass: '',
+      iv: '',
+      uploaded: false,
+      downloadUrl: ''
     }
   },
 
-  created () {
-    console.log('hey')
-  },
-
   methods: {
+    updateField (field, val) {
+      this[field] = val
+    },
     upload () {
       let file = document.getElementById('file').files[0]
       if (!file) {
         console.log('file required')
+        return
+      }
+      if (this.accessPass.length === 0) {
+        console.log('access pass required')
+        return
+      }
+      if (this.encryptPass.length === 0) {
+        console.log('encrypt pass required')
         return
       }
       let iv = randomBytes(16)
@@ -70,16 +88,19 @@ export default {
       const encryptUploadData = (data, key, respUrl) => {
         console.log(`upload key: ${key}`)
         console.log('freshbytes', data)
-        const uploadBytesCallback = (bytes) => {
-          console.log(bytes)
+
+        const encryptedBytesCallback = (bytes) => {
+          console.log('encrypted bytes', bytes.length, bytes)
           let bytesHex = Buffer.from(bytes).toString('hex')
           axios.post(`${respUrl}?key=${key}`, bytesHex, {headers: {'content-type': 'text/plain'}})
             .then(resp => {
               console.log(resp.data)
               console.log(`key: ${key}`)
+              this.uploaded = true
+              this.downloadUrl = `http://${window.location.host}/#/download?key=${key}`
             })
         }
-        encrypt(data, iv, encryptPassBytes, uploadBytesCallback)
+        encrypt(data, iv, encryptPassBytes, encryptedBytesCallback)
       }
 
       let reader = new FileReader()
@@ -92,7 +113,8 @@ export default {
         console.log(`loaded ${data.byteLength} bytes`)
         window.crypto.subtle.digest('SHA-256', data).then(contentHash => {
           const contentHashHex = Buffer.from(contentHash).toString('Hex')
-          const params = {file_name: file.name, content_hash: contentHashHex, iv: ivHex, access_password: accessPassHex}
+          console.log('content hash', contentHashHex)
+          const params = {file_name: file.name, file_size: data.byteLength, content_hash: contentHashHex, iv: ivHex, access_password: accessPassHex}
           const headers = {headers: {'content-type': 'application/json'}}
           axios.post('/api/upload/init', params, headers).then(resp => {
             encryptUploadData(data, resp.data.key, resp.data.responseUrl)
@@ -105,21 +127,5 @@ export default {
 }
 </script>
 
-<!-- Add "scoped" attribute to limit CSS to this component only -->
 <style scoped>
-.table- {
-  display: table;
-}
-.row- {
-  display: table-row;
-}
-.cell- {
-  display: table-cell;
-}
-.left {
-  text-align: left;
-}
-.right {
-  text-align: right;
-}
 </style>

@@ -1,14 +1,16 @@
 <template>
   <div id="upload">
-    sup : {{ key }}
-    <br/>
+    <h3>
+      Download
+    </h3>
+    <router-link to="/upload">upload</router-link>
     <form id="download-form" v-on:submit="download">
       <div class="table-">
         <div class="row-">
           <div class="cell- left">
-            download key:
+            Download key:
           </div>
-          <div class="cell- right">
+          <div class="cell- left">
             <input id="key" v-model="key" type="text"/>
           </div>
         </div>
@@ -16,16 +18,16 @@
           <div class="cell- left">
             Access Password:
           </div>
-          <div class="cell- right">
-            <input id="access-pass" v-model="accessPass" type="password"/>
+          <div class="cell- left">
+            <Password confirm=true :updateFunc="(val) => updateField('accessPass', val)" />
           </div>
         </div>
         <div class="row-">
           <div class="cell- left">
             Encryption Password:
           </div>
-          <div class="cell- right">
-            <input id="encrypt-pass" v-model="encryptPass" type="password"/>
+          <div class="cell- left">
+            <Password confirm=true :updateFunc="(val) => updateField('encryptPass', val)" />
           </div>
         </div>
         <div cell="row-">
@@ -38,11 +40,16 @@
 
 <script>
 import axios from 'axios'
+import FileSaver from 'file-saver'
+import Password from '@/components/Password'
 import {logerr} from '@/utils/error'
 import {bytesFromHex, decrypt} from '@/utils/crypto'
 
 export default {
   name: 'download',
+  components: {
+    Password
+  },
   data () {
     return {
       key: '',
@@ -58,11 +65,39 @@ export default {
   },
 
   methods: {
+    updateField (field, val) {
+      this[field] = val
+    },
     download () {
+      if (this.key.length === 0) {
+        console.log('key required')
+        return
+      }
+      if (this.accessPass.length === 0) {
+        console.log('access pass required')
+        return
+      }
+      if (this.encryptPass.length === 0) {
+        console.log('encypt pass required')
+        return
+      }
+      const decryptedBytesCallback = (bytes) => {
+        window.crypto.subtle.digest('SHA-256', bytes).then(contentHash => {
+          const hex = Buffer.from(contentHash).toString('hex')
+          console.log('decrypted bytes hex', hex)
+          const params = {key: this.key, hash: hex}
+          const headers = {headers: {'content-type': 'application/json'}}
+          axios.post('/api/download/name', params, headers).then(resp => {
+            const blob = new Blob([bytes], {type: 'application/octet-stream'})
+            FileSaver.saveAs(blob, resp.data.file_name)
+          })
+        })
+      }
+
       const params = {key: this.key, access_password: Buffer.from(this.accessPass).toString('hex')}
       const headers = {headers: {'content-type': 'application/json'}}
       axios.post('/api/download/iv', params, headers).then(resp => {
-        const iv = bytesFromHex(resp.data.iv)
+        const iv = new Uint8Array(bytesFromHex(resp.data.iv))
         console.log(`iv: ${iv}`)
         const DLheaders = {headers: {'content-type': 'application/json'}, responseType: 'text'}
         axios.post('/api/download', params, DLheaders).then(resp => {
@@ -72,7 +107,7 @@ export default {
           console.log(dataBytes)
           const encryptPassBytes = new TextEncoder().encode(this.encryptPass)
           console.log('encrytion pass', encryptPassBytes)
-          decrypt(dataBytes, iv, encryptPassBytes, (bytes) => console.log('decryptedbytes', bytes))
+          decrypt(dataBytes, iv, encryptPassBytes, decryptedBytesCallback)
         })
       }).catch(err => logerr(err))
     }
@@ -82,19 +117,4 @@ export default {
 </script>
 
 <style scoped>
-.table- {
-  display: table;
-}
-.row- {
-  display: table-row;
-}
-.cell- {
-  display: table-cell;
-}
-.left {
-  text-align: left;
-}
-.right {
-  text-align: right;
-}
 </style>

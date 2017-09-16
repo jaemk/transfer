@@ -16,4 +16,24 @@
   color: #2c3e50;
   margin-top: 60px;
 }
+
+.table- {
+  display: table;
+}
+
+.row- {
+  display: table-row;
+}
+
+.cell- {
+  display: table-cell;
+}
+
+.left {
+  text-align: left;
+}
+
+.right {
+  text-align: right;
+}
 </style>
