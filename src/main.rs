@@ -64,9 +64,13 @@ pub mod errors {
                 description("Bad request")
                 display("BadRequest: {}", s)
             }
-            InvalidAuth(inner: ()) {
+            UnequalBytes(s: String) {
+                description("Unequal bytes")
+                display("UnequalBytes Error: {}", s)
+            }
+            InvalidAuth(s: String) {
                 description("Invalid auth")
-                display("InvalidAuth Error")
+                display("InvalidAuth Error: {}", s)
             }
         }
     }
@@ -79,6 +83,15 @@ pub mod errors {
                     let body = json!({"error": s}).to_string();
                     rocket::Response::build()
                         .status(rocket::http::Status::BadRequest)
+                        .header(rocket::http::ContentType::JSON)
+                        .sized_body(std::io::Cursor::new(body))
+                        .ok()
+                }
+                InvalidAuth(ref s) => {
+                    let body = json!({"error": s}).to_string();
+                    rocket::Response::build()
+                        .status(rocket::http::Status::Unauthorized)
+                        .header(rocket::http::ContentType::JSON)
                         .sized_body(std::io::Cursor::new(body))
                         .ok()
                 }

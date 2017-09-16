@@ -11,6 +11,7 @@ use uuid::Uuid;
 use chrono::{Utc, Duration};
 
 use db;
+use auth;
 use models;
 use errors::*;
 
@@ -53,12 +54,14 @@ fn api_bye<'a>(msg: Json<Message>) -> Json<JsonValue> {
 struct UploadInfoPost {
     iv: String,
     file_name: String,
+    file_size: u32,
     content_hash: String,
     access_password: String,
 }
 struct UploadInfo {
     iv: Vec<u8>,
     file_name: String,
+    file_size: u32,
     content_hash: Vec<u8>,
     access_password: Vec<u8>,
 }
@@ -67,15 +70,21 @@ impl UploadInfoPost {
         Ok(UploadInfo {
             iv: Vec::from_hex(&self.iv)?,
             file_name: self.file_name.to_owned(),
+            file_size: self.file_size,
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
         })
     }
 }
 
+const UPLOAD_LIMIT_BYTES: u32 = 100_000_000;
+
 #[post("/api/upload/init", data = "<info>")]
 fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let info = info.decode_hex().expect("bad upload info");
+    if info.file_size > UPLOAD_LIMIT_BYTES {
+        bail_fmt!(ErrorKind::BadRequest, "Upload too large, max bytes: {}", UPLOAD_LIMIT_BYTES)
+    }
     let uuid = Uuid::new_v4();
     let uuid_hex = uuid.as_bytes().to_hex();
 
@@ -136,14 +145,14 @@ fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) 
 
 
 #[derive(Deserialize)]
-struct DownloadId {
+struct DownloadIdAccess {
     key: String,
     access_password: String,
 }
 
 
 #[post("/api/download/iv", data = "<download_info>")]
-fn api_download_iv(download_info: Json<DownloadId>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+fn api_download_iv(download_info: Json<DownloadIdAccess>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let uuid_bytes = Vec::from_hex(&download_info.key)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
     let upload = models::Upload::find(&**conn, &uuid)?;
@@ -155,7 +164,7 @@ fn api_download_iv(download_info: Json<DownloadId>, conn: db::DbConn) -> Result<
 
 
 #[post("/api/download", data = "<download_info>")]
-fn api_download(download_info: Json<DownloadId>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
+fn api_download(download_info: Json<DownloadIdAccess>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
     let uuid_bytes = Vec::from_hex(&download_info.key)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
     let upload = models::Upload::find(&**conn, &uuid)?;
@@ -166,3 +175,20 @@ fn api_download(download_info: Json<DownloadId>, conn: db::DbConn) -> Result<res
     Ok(response::Stream::from(file))
 }
 
+
+#[derive(Deserialize)]
+struct DownloadIdHash {
+    key: String,
+    hash: String,
+}
+
+
+#[post("/api/download/name", data = "<download_info>")]
+fn api_download_name(download_info: Json<DownloadIdHash>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+    let uuid_bytes = Vec::from_hex(&download_info.key)?;
+    let uuid = Uuid::from_bytes(&uuid_bytes)?;
+    let upload = models::Upload::find(&**conn, &uuid)?;
+    let hash_bytes = Vec::from_hex(&download_info.hash)?;
+    auth::eq(&hash_bytes, &upload.content_hash)?;
+    Ok(Json(json!({"file_name": &upload.file_name})))
+}

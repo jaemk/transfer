@@ -43,6 +43,7 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
                     handlers::api_upload_file,
                     handlers::api_download_iv,
                     handlers::api_download,
+                    handlers::api_download_name,
                 ]
             )
         .launch();

@@ -69,6 +69,8 @@ impl Auth {
     pub fn verify(&self, other_bytes: &[u8]) -> Result<()> {
         let other_hash = auth::bcrypt_hash(other_bytes, &self.salt)?;
         auth::eq(&self.hash, &other_hash)
+            .map_err(|_| format_err!(ErrorKind::InvalidAuth, "Invalid authentication"))?;
+        Ok(())
     }
 }
 

@@ -30,10 +30,9 @@ pub fn bcrypt_hash(bytes: &[u8], salt: &[u8]) -> Result<Vec<u8>> {
 
 
 pub fn eq(a: &[u8], b: &[u8]) -> Result<()> {
-    println!("start auth check");
     constant_time::verify_slices_are_equal(a, b)
-        .map_err(|_| ErrorKind::InvalidAuth(()))?;
-    println!("Auth OK");
+        .map_err(|_| format_err!(ErrorKind::UnequalBytes, "Bytes differ"))?;
+    debug!("Auth OK");
     Ok(())
 }
 
