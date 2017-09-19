@@ -6,6 +6,8 @@
 
 
 - Server (base project dir):
+    - `cargo install migrant --features postgresql`
+    - `migrant init` / `migrant apply --all`
     - Nightly `rust` is currently required for `rocket`
     - `rustup override set nightly`
     - `cargo run -- serve --log`
