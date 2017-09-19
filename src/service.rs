@@ -1,4 +1,5 @@
 use std::env;
+use std::thread;
 
 use env_logger;
 use chrono::Local;
@@ -6,6 +7,7 @@ use rocket;
 use rocket::config::{Config, LoggingLevel};
 
 use handlers;
+use sweep;
 use db;
 use errors::*;
 
@@ -24,7 +26,9 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
             })
         .parse(&env::var("LOG").unwrap_or_default())
         .init()?;
-        //.expect("failed to initialize logger");
+
+    let _ = thread::spawn(sweep::db_sweeper);
+
     info!("** Listening on {} **", host);
     let mut config = Config::production()?;
     config.set_address(host)?;

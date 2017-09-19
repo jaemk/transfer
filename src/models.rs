@@ -1,11 +1,16 @@
 use std::env;
 use std::path::{Path, PathBuf};
 use postgres::{self, GenericConnection};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Utc, Duration};
 use uuid::Uuid;
 
 use auth;
 use errors::*;
+
+
+pub const UPLOAD_LIMIT_BYTES: i64 = 100_000_000;
+pub const UPLOAD_TIMEOUT_SECS: i64 = 30;
+pub const UPLOAD_MAX_LIFE_SECS: i64 = 60 * 60 * 24;
 
 
 pub trait FromRow {
@@ -157,6 +162,17 @@ impl InitUpload {
             access_password: self.access_password,
         })
     }
+
+    pub fn clear_outdated<T: GenericConnection>(conn: &T) -> Result<i64> {
+        let stmt = "with deleted as (delete from init_upload where date_created < $1 returning 1) \
+                    select count(*) from deleted";
+        let timeout = Duration::seconds(UPLOAD_TIMEOUT_SECS);
+        let now = Utc::now();
+        let cutoff = now.checked_sub_signed(timeout)
+            .ok_or_else(|| format_err!(ErrorKind::InvalidDateTimeMathOffset, "Error subtracting {} secs from {:?}",
+                                       UPLOAD_TIMEOUT_SECS, now))?;
+        try_query_aggregate!(conn.query(stmt, &[&cutoff]), i64)
+    }
 }
 
 
@@ -227,4 +243,28 @@ impl Upload {
                     limit 1";
         try_query_one!(conn.query(stmt, &[uuid]), Upload)
     }
+
+    pub fn file_name_exists<T: GenericConnection>(conn: &T, file_name: &str) -> Result<bool> {
+        let stmt = "select exists(select 1 from upload where file_name = $1)";
+        try_query_aggregate!(conn.query(stmt, &[&file_name]), bool)
+    }
+
+    pub fn select_outdated<T: GenericConnection>(conn: &T) -> Result<Vec<Self>> {
+        let stmt = "select id, uuid_, content_hash, file_size, file_name, file_path, iv, access_password, date_created \
+                    from upload \
+                    where date_created < $1";
+        let max_life = Duration::seconds(UPLOAD_MAX_LIFE_SECS);
+        let now = Utc::now();
+        let cutoff = now.checked_sub_signed(max_life)
+            .ok_or_else(|| format_err!(ErrorKind::InvalidDateTimeMathOffset, "Error subtracting {} secs from {:?}",
+                                       UPLOAD_MAX_LIFE_SECS, now))?;
+        try_query_vec!(conn.query(stmt, &[&cutoff]), Upload)
+    }
+
+    pub fn delete<T: GenericConnection>(self, conn: &T) -> Result<i64> {
+        let stmt = "with deleted as (delete from upload where id = $1 returning 1) \
+                    select count(*) from deleted";
+        try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
+    }
 }
+

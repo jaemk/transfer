@@ -21,6 +21,7 @@ extern crate crypto;
 
 #[macro_use] pub mod macros;
 pub mod service;
+pub mod sweep;
 pub mod handlers;
 pub mod db;
 pub mod models;
@@ -71,6 +72,10 @@ pub mod errors {
             InvalidAuth(s: String) {
                 description("Invalid auth")
                 display("InvalidAuth Error: {}", s)
+            }
+            InvalidDateTimeMathOffset(s: String) {
+                description("Invalid DateTime Math")
+                display("InvalidDateTimeMathOffset Error: {}", s)
             }
         }
     }

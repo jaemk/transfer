@@ -6,7 +6,10 @@ use rocket::request::{self, FromRequest};
 use rocket::{Request, State, Outcome};
 use r2d2;
 use r2d2_postgres::{TlsMode, PostgresConnectionManager};
+use postgres;
 use migrant_lib;
+
+use super::errors::*;
 
 pub type Pool = r2d2::Pool<PostgresConnectionManager>;
 
@@ -32,19 +35,26 @@ impl Deref for DbConn {
 }
 
 
-pub fn connect_str() -> String {
-    let dir = env::current_dir().expect("Unable to retrieve current working dir");
-    let config_path = migrant_lib::search_for_config(&dir).expect("Unable to find `migrant.toml` config file");
-    let config = migrant_lib::Config::load_file_only(&config_path).expect("Failed loading `migrant.toml`");
-    config.connect_string().expect("Failed creating a connection string")
+pub fn connect_str() -> Result<String> {
+    let dir = env::current_dir().chain_err(|| "Unable to retrieve current working dir")?;
+    let config_path = migrant_lib::search_for_config(&dir).chain_err(|| "Unable to find `migrant.toml` config file")?;
+    let config = migrant_lib::Config::load_file_only(&config_path).chain_err(|| "Failed loading `migrant.toml`")?;
+    Ok(config.connect_string().chain_err(|| "Failed creating a connection string")?)
 }
 
 
 pub fn init_pool() -> Pool {
     let config = r2d2::Config::default();
-    let conn_str = connect_str();
+    let conn_str = connect_str().expect("Failed to build connection string");
     let manager = PostgresConnectionManager::new(conn_str, TlsMode::None)
         .expect("Failed to connect to db");
     r2d2::Pool::new(config, manager)
         .expect("Failed to create db pool")
 }
+
+
+pub fn init_conn() -> Result<postgres::Connection> {
+    let conn_str = connect_str()?;
+    Ok(postgres::Connection::connect(conn_str, postgres::TlsMode::None)?)
+}
+

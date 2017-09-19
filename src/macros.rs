@@ -114,6 +114,20 @@ macro_rules! try_insert_to_model {
 //}
 
 
+macro_rules! try_query_vec {
+    ($query:expr, $model:ident) => {
+        match $query {
+            Err(e) => {
+                Err(Error::from(e))
+            }
+            Ok(rows) => {
+                Ok(rows.iter().map($model::from_row).collect())
+            }
+        }
+    }
+}
+
+
 /// Takes the first row returned and converts it into the
 /// associated model type. If more than one row
 /// is returned, returns an `Error::MultipleRecords`.

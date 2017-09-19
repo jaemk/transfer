@@ -77,13 +77,12 @@ impl UploadInfoPost {
     }
 }
 
-const UPLOAD_LIMIT_BYTES: u32 = 100_000_000;
 
 #[post("/api/upload/init", data = "<info>")]
 fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let info = info.decode_hex().expect("bad upload info");
-    if info.file_size > UPLOAD_LIMIT_BYTES {
-        bail_fmt!(ErrorKind::BadRequest, "Upload too large, max bytes: {}", UPLOAD_LIMIT_BYTES)
+    if info.file_size > models::UPLOAD_LIMIT_BYTES {
+        bail_fmt!(ErrorKind::BadRequest, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
     }
     let uuid = Uuid::new_v4();
     let uuid_hex = uuid.as_bytes().to_hex();
@@ -113,7 +112,6 @@ struct UploadId{
 }
 
 
-const UPLOAD_TIMEOUT: i64 = 30;  // seconds
 
 #[post("/api/upload?<upload_info>", format = "text/plain", data = "<data>")]
 fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) -> Result<Json<JsonValue>> {
@@ -127,7 +125,7 @@ fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) 
         debug!("Deleted `init_upload` id={}", init_upload.id);
         // assert within timespan
         let now = Utc::now();
-        if now.signed_duration_since(init_upload.date_created) > Duration::seconds(UPLOAD_TIMEOUT) {
+        if now.signed_duration_since(init_upload.date_created) > Duration::seconds(models::UPLOAD_TIMEOUT_SECS) {
             error!("Upload request came too late");
             bail_fmt!(ErrorKind::BadRequest, "Upload request came to late");
         }
