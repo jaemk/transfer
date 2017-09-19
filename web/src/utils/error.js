@@ -1,6 +1,6 @@
 
 export const logerr = (err) => {
-  console.log(err)
+  console.log('error', err)
 }
 
 export const InvalidHexException = (s) => {

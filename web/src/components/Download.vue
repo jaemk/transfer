@@ -35,6 +35,10 @@
         </div>
       </div>
     </form>
+
+    <div id="error-message">
+      <span v-if="errorMessage">{{ errorMessage }}</span>
+    </div>
   </div>
 </template>
 
@@ -54,7 +58,8 @@ export default {
     return {
       key: '',
       accessPass: '',
-      encryptPass: ''
+      encryptPass: '',
+      errorMessage: ''
     }
   },
 
@@ -69,6 +74,7 @@ export default {
       this[field] = val
     },
     download () {
+      this.errorMessage = ''
       if (this.key.length === 0) {
         console.log('key required')
         return
@@ -90,8 +96,13 @@ export default {
           axios.post('/api/download/name', params, headers).then(resp => {
             const blob = new Blob([bytes], {type: 'application/octet-stream'})
             FileSaver.saveAs(blob, resp.data.file_name)
-          })
-        })
+          }).catch(logerr)
+        }).catch(logerr)
+      }
+
+      const decryptionFailedCallback = e => {
+        logerr(e)
+        this.errorMessage = 'Decryption Failed'
       }
 
       const params = {key: this.key, access_password: Buffer.from(this.accessPass).toString('hex')}
@@ -107,9 +118,9 @@ export default {
           console.log(dataBytes)
           const encryptPassBytes = new TextEncoder().encode(this.encryptPass)
           console.log('encrytion pass', encryptPassBytes)
-          decrypt(dataBytes, iv, encryptPassBytes, decryptedBytesCallback)
-        })
-      }).catch(err => logerr(err))
+          decrypt(dataBytes, iv, encryptPassBytes, decryptedBytesCallback, decryptionFailedCallback)
+        }).catch(logerr)
+      }).catch(logerr)
     }
   }
 }
@@ -117,4 +128,7 @@ export default {
 </script>
 
 <style scoped>
+#error-message {
+  color: red;
+}
 </style>

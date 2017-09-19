@@ -1,6 +1,6 @@
 import {logerr, InvalidHexException} from '@/utils/error'
 
-const crypto = window.crypto
+export const crypto = window.crypto
 const algoName = 'AES-GCM'
 
 export const randomBytes = (n) => {
@@ -30,14 +30,14 @@ export const encrypt = (data, iv, pass, callback) => {
   })
 }
 
-export const decrypt = (data, iv, pass, callback) => {
+export const decrypt = (data, iv, pass, decryptedCallback, decryptionFailedCallback) => {
   const algo = {name: algoName, iv: iv}
   crypto.subtle.digest('SHA-256', pass).then((hash) => {
     crypto.subtle.importKey('raw', hash, algo, false, ['decrypt']).then(key => {
       crypto.subtle.decrypt(algo, key, data).then(decryptedData => {
         let dataBytes = new Uint8Array(decryptedData)
-        callback(dataBytes)
-      }).catch(logerr)
+        decryptedCallback(dataBytes)
+      }).catch(e => decryptionFailedCallback ? decryptionFailedCallback(e) : logerr(e))
     }).catch(logerr)
   }).catch(logerr)
 }

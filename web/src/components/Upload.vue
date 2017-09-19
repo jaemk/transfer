@@ -98,7 +98,7 @@ export default {
               console.log(`key: ${key}`)
               this.uploaded = true
               this.downloadUrl = `http://${window.location.host}/#/download?key=${key}`
-            })
+            }).catch(logerr)
         }
         encrypt(data, iv, encryptPassBytes, encryptedBytesCallback)
       }
@@ -118,8 +118,8 @@ export default {
           const headers = {headers: {'content-type': 'application/json'}}
           axios.post('/api/upload/init', params, headers).then(resp => {
             encryptUploadData(data, resp.data.key, resp.data.responseUrl)
-          }).catch(err => logerr(err))
-        }).catch(err => logerr(err))
+          }).catch(logerr)
+        }).catch(logerr)
       }
       reader.readAsArrayBuffer(file)
     }
