@@ -54,14 +54,14 @@ fn api_bye<'a>(msg: Json<Message>) -> Json<JsonValue> {
 struct UploadInfoPost {
     iv: String,
     file_name: String,
-    file_size: u32,
+    file_size: u64,
     content_hash: String,
     access_password: String,
 }
 struct UploadInfo {
     iv: Vec<u8>,
     file_name: String,
-    file_size: u32,
+    file_size: i64,
     content_hash: Vec<u8>,
     access_password: Vec<u8>,
 }
@@ -70,7 +70,7 @@ impl UploadInfoPost {
         Ok(UploadInfo {
             iv: Vec::from_hex(&self.iv)?,
             file_name: self.file_name.to_owned(),
-            file_size: self.file_size,
+            file_size: self.file_size as i64,
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
         })
@@ -93,6 +93,7 @@ fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<
         uuid: uuid,
         file_name: info.file_name,
         content_hash: info.content_hash,
+        file_size: info.file_size,
         iv: info.iv,
         access_password: access_auth.id,
     };
