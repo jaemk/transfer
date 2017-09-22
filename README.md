@@ -4,6 +4,7 @@
 
 > Built with `rust` and `vue.js`.
 
+Also see the command line client, [`transfer-cli`](https://github.com/jaemk/transfer-cli)
 
 - Server (base project dir):
     - `cargo install migrant --features postgresql`
