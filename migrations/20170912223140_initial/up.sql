@@ -11,7 +11,7 @@ create table init_upload (
     file_name           text not null,
     content_hash        bytea not null,
     file_size           bigint not null,
-    iv                  bytea not null,
+    nonce               bytea not null,
     access_password     integer not null unique references "auth" ("id") on delete cascade,
     date_created        timestamp with time zone not null default now()
 );
@@ -23,7 +23,7 @@ create table upload (
     file_size           bigint not null,
     file_name           text not null,
     file_path           text not null,
-    iv                  bytea not null,
+    nonce               bytea not null,
     access_password     integer not null unique references "auth" ("id") on delete cascade,
     date_created        timestamp with time zone not null default now()
 );
