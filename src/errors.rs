@@ -8,6 +8,7 @@ use hex;
 use rocket;
 use postgres;
 use ring;
+use migrant_lib;
 
 
 error_chain! {
@@ -20,6 +21,7 @@ error_chain! {
         RocketConfig(rocket::config::ConfigError) #[doc = "Error finalizing rocket config"];
         Postgres(postgres::error::Error);
         RingUnspecified(ring::error::Unspecified);
+        MigrantLib(migrant_lib::Error);
     }
     errors {
         DoesNotExist(s: String) {
@@ -53,6 +55,10 @@ error_chain! {
         InvalidDateTimeMathOffset(s: String) {
             description("Invalid DateTime Math")
             display("InvalidDateTimeMathOffset Error: {}", s)
+        }
+        ConfirmationError(s: String) {
+            description("Confirmation error")
+            display("ConfirmationError: {}", s)
         }
     }
 }
