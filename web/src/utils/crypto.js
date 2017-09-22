@@ -18,22 +18,23 @@ export const bytesFromHex = (s) => {
   return buf
 }
 
-export const encrypt = (data, iv, pass, callback) => {
-  const algo = {name: algoName, iv: iv}
-  crypto.subtle.digest('SHA-256', pass).then((hash) => {
-    crypto.subtle.importKey('raw', hash, algo, false, ['encrypt']).then((key) => {
+export const encrypt = (data, nonce, pass, callback) => {
+  crypto.subtle.digest('SHA-256', pass).then(passHash => {
+    const algo = {name: algoName, iv: nonce}
+    console.log(nonce)
+    crypto.subtle.importKey('raw', passHash, algo, false, ['encrypt']).then((key) => {
       crypto.subtle.encrypt(algo, key, data).then((encryptedData) => {
         let dataBytes = new Uint8Array(encryptedData)
         callback(dataBytes)
-      })
-    })
-  })
+      }).catch(e => console.log('encrypt err:', e))
+    }).catch(e => console.log('key err:', e))
+  }).catch(logerr)
 }
 
-export const decrypt = (data, iv, pass, decryptedCallback, decryptionFailedCallback) => {
-  const algo = {name: algoName, iv: iv}
-  crypto.subtle.digest('SHA-256', pass).then((hash) => {
-    crypto.subtle.importKey('raw', hash, algo, false, ['decrypt']).then(key => {
+export const decrypt = (data, nonce, pass, decryptedCallback, decryptionFailedCallback) => {
+  crypto.subtle.digest('SHA-256', pass).then(passHash => {
+    const algo = {name: algoName, iv: nonce}
+    crypto.subtle.importKey('raw', passHash, algo, false, ['decrypt']).then(key => {
       crypto.subtle.decrypt(algo, key, data).then(decryptedData => {
         let dataBytes = new Uint8Array(decryptedData)
         decryptedCallback(dataBytes)

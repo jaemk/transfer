@@ -107,9 +107,9 @@ export default {
 
       const params = {key: this.key, access_password: Buffer.from(this.accessPass).toString('hex')}
       const headers = {headers: {'content-type': 'application/json'}}
-      axios.post('/api/download/iv', params, headers).then(resp => {
-        const iv = new Uint8Array(bytesFromHex(resp.data.iv))
-        console.log(`iv: ${iv}`)
+      axios.post('/api/download/init', params, headers).then(resp => {
+        const nonce = new Uint8Array(bytesFromHex(resp.data.nonce))
+        console.log(`nonce: ${nonce}`)
         const DLheaders = {headers: {'content-type': 'application/json'}, responseType: 'text'}
         axios.post('/api/download', params, DLheaders).then(resp => {
           console.log('post dl')
@@ -118,7 +118,7 @@ export default {
           console.log(dataBytes)
           const encryptPassBytes = new TextEncoder().encode(this.encryptPass)
           console.log('encrytion pass', encryptPassBytes)
-          decrypt(dataBytes, iv, encryptPassBytes, decryptedBytesCallback, decryptionFailedCallback)
+          decrypt(dataBytes, nonce, encryptPassBytes, decryptedBytesCallback, decryptionFailedCallback)
         }).catch(logerr)
       }).catch(logerr)
     }

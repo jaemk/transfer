@@ -79,10 +79,10 @@ export default {
         console.log('encrypt pass required')
         return
       }
-      let iv = randomBytes(16)
+      let nonce = randomBytes(12)
       let encryptPassBytes = new TextEncoder().encode(this.encryptPass)
       let accessPassBytes = new TextEncoder().encode(this.accessPass)
-      let ivHex = Buffer.from(iv).toString('hex')
+      let nonceHex = Buffer.from(nonce).toString('hex')
       let accessPassHex = Buffer.from(accessPassBytes).toString('hex')
 
       const encryptUploadData = (data, key, respUrl) => {
@@ -100,7 +100,7 @@ export default {
               this.downloadUrl = `http://${window.location.host}/#/download?key=${key}`
             }).catch(logerr)
         }
-        encrypt(data, iv, encryptPassBytes, encryptedBytesCallback)
+        encrypt(data, nonce, encryptPassBytes, encryptedBytesCallback)
       }
 
       let reader = new FileReader()
@@ -114,10 +114,10 @@ export default {
         window.crypto.subtle.digest('SHA-256', data).then(contentHash => {
           const contentHashHex = Buffer.from(contentHash).toString('Hex')
           console.log('content hash', contentHashHex)
-          const params = {file_name: file.name, file_size: data.byteLength, content_hash: contentHashHex, iv: ivHex, access_password: accessPassHex}
+          const params = {file_name: file.name, file_size: data.byteLength, content_hash: contentHashHex, nonce: nonceHex, access_password: accessPassHex}
           const headers = {headers: {'content-type': 'application/json'}}
           axios.post('/api/upload/init', params, headers).then(resp => {
-            encryptUploadData(data, resp.data.key, resp.data.responseUrl)
+            encryptUploadData(data, resp.data.key, resp.data.response_url)
           }).catch(logerr)
         }).catch(logerr)
       }
