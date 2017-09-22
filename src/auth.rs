@@ -1,9 +1,14 @@
+/*!
+Authorization/crypto things
+
+*/
 use errors::*;
 use ring::rand::{self, SecureRandom};
 use ring::constant_time;
 use crypto::bcrypt;
 
 
+/// Generate a new 16-byte salt for use with `bcrypt`
 pub fn new_salt() -> Result<Vec<u8>> {
     const SALT_SIZE: usize = 16;
     let mut salt = vec![0u8; SALT_SIZE];
@@ -13,6 +18,7 @@ pub fn new_salt() -> Result<Vec<u8>> {
 }
 
 
+/// Calculate the `bcrypt` hash of `bytes` and `salt`
 pub fn bcrypt_hash(bytes: &[u8], salt: &[u8]) -> Result<Vec<u8>> {
     let slen = salt.len();
     let blen = bytes.len();
@@ -29,6 +35,7 @@ pub fn bcrypt_hash(bytes: &[u8], salt: &[u8]) -> Result<Vec<u8>> {
 }
 
 
+/// Constant time slice equality comparison
 pub fn eq(a: &[u8], b: &[u8]) -> Result<()> {
     constant_time::verify_slices_are_equal(a, b)
         .map_err(|_| format_err!(ErrorKind::UnequalBytes, "Bytes differ"))?;

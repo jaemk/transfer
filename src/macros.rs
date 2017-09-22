@@ -84,36 +84,19 @@ macro_rules! try_insert_to_model {
 }
 
 
-/// Attempts to execute a `select`, taking the first row returned and
-/// converting it into the associated model type
+/// Convert all rows returned into the associated model type
+/// and collect them in a `Vec`
 ///
-/// Returns a `Result<Option<T>>` containing the given model
+/// Returns a `Result<Vec<T>>` containing the given model
 ///
 /// # Example
 ///
 /// ```rust,ignore
-/// fn filter_first(key: &str, conn: &Connection) -> Result<Paste> {
-///     let stmt = "select * from pastes where key = $1";
-///     try_query_first!(conn.query(stmt, &[&key]), Paste)
+/// fn find_all(text: &str, conn: &Connection) -> Result<Vec<Paste>> {
+///     let stmt = "select * from pastes where content like '%' || $1 || '%'";
+///     try_query_vec!(conn.query(stmt, &[&text]), Paste)
 /// }
 /// ```
-//macro_rules! try_query_first {
-//    ($query:expr, $model:ident) => {
-//        match $query {
-//            Err(e) => {
-//                Err(Error::from(e))
-//            }
-//            Ok(rows) => {
-//                match rows.iter().next() {
-//                    None => bail_fmt!(ErrorKind::DoesNotExist, "No rows returned from table: {}", $model::table_name()),
-//                    Some(row) => Ok($model::from_row(row)),
-//                }
-//            }
-//        }
-//    }
-//}
-
-
 macro_rules! try_query_vec {
     ($query:expr, $model:ident) => {
         match $query {
@@ -163,7 +146,6 @@ macro_rules! try_query_one {
         }
     }
 }
-
 
 
 /// Attempts to execute some statement that returns a single row

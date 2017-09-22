@@ -1,4 +1,6 @@
-
+/*!
+Database connection stuff
+*/
 use std::env;
 use std::ops::Deref;
 use rocket::http::Status;
@@ -11,10 +13,14 @@ use migrant_lib;
 
 use super::errors::*;
 
+
+/// Postgres r2d2 pool
 pub type Pool = r2d2::Pool<PostgresConnectionManager>;
 
 
+/// Postgres r2d2 pooled connection (wrapped for `rocket`)
 pub struct DbConn(pub r2d2::PooledConnection<PostgresConnectionManager>);
+
 
 impl<'a, 'r> FromRequest<'a, 'r> for DbConn {
     type Error = ();
@@ -35,6 +41,7 @@ impl Deref for DbConn {
 }
 
 
+/// Try to get the current db connection string
 pub fn connect_str() -> Result<String> {
     let dir = env::current_dir().chain_err(|| "Unable to retrieve current working dir")?;
     let config_path = migrant_lib::search_for_config(&dir).chain_err(|| "Unable to find `migrant.toml` config file")?;
@@ -43,6 +50,7 @@ pub fn connect_str() -> Result<String> {
 }
 
 
+/// Initialize a new r2d2 postgres connection pool
 pub fn init_pool() -> Pool {
     let config = r2d2::Config::default();
     let conn_str = connect_str().expect("Failed to build connection string");

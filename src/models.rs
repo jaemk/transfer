@@ -1,3 +1,7 @@
+/*!
+Database models
+
+*/
 use std::env;
 use std::path::{Path, PathBuf};
 use postgres::{self, GenericConnection};
@@ -14,12 +18,14 @@ pub const UPLOAD_MAX_LIFE_SECS: i64 = 60 * 60 * 24;
 
 
 pub trait FromRow {
+    /// Return the associated database table name
     fn table_name() -> &'static str;
+    /// Convert a `postgres::row::Row` into an instance
     fn from_row(row: postgres::rows::Row) -> Self;
 }
 
 
-
+/// For inserting a new `Auth` record
 pub struct NewAuth {
     pub salt: Vec<u8>,
     pub hash: Vec<u8>,
@@ -44,6 +50,7 @@ impl NewAuth {
 }
 
 
+/// Maps to db table `auth`
 pub struct Auth {
     pub id: i32,
     pub salt: Vec<u8>,
@@ -64,6 +71,7 @@ impl FromRow for Auth {
     }
 }
 impl Auth {
+    /// Return the `auth` record for the given `id` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, id: &i32) -> Result<Self> {
         let stmt = "select id, salt, hash, date_created from auth \
                     where id = $1 \
@@ -71,6 +79,8 @@ impl Auth {
         try_query_one!(conn.query(stmt, &[id]), Auth)
     }
 
+    /// Try verifying the current `auth` record against a set of bytes, returning
+    /// `Ok` if verification passes or `ErrorKind::InvalidAuth`
     pub fn verify(&self, other_bytes: &[u8]) -> Result<()> {
         let other_hash = auth::bcrypt_hash(other_bytes, &self.salt)?;
         auth::eq(&self.hash, &other_hash)
@@ -80,6 +90,7 @@ impl Auth {
 }
 
 
+/// For initializing a new `InitUpload` record
 pub struct NewInitUpload {
     pub uuid: Uuid,
     pub file_name: String,
@@ -103,6 +114,7 @@ impl NewInitUpload {
 }
 
 
+/// Maps to db table `init_upload`
 pub struct InitUpload {
     pub id: i32,
     pub uuid: Uuid,
@@ -131,6 +143,7 @@ impl FromRow for InitUpload {
     }
 }
 impl InitUpload {
+    /// Return the `init_upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
         let stmt = "select id, uuid_, file_name, content_hash, file_size, nonce, access_password, date_created \
                     from init_upload \
@@ -139,12 +152,17 @@ impl InitUpload {
         try_query_one!(conn.query(stmt, &[uuid]), InitUpload)
     }
 
+    /// Try deleting the current record from the database, returning the number of items deleted
     pub fn delete<T: GenericConnection>(&self, conn: &T) -> Result<i64> {
         let stmt = "with deleted as (delete from init_upload where id = $1 returning 1) \
                     select count(*) from deleted";
         try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
     }
 
+    /// Convert the current `InitUpload` into a `NewUpload`
+    ///
+    /// Converts current instance with a given `file_path` where the associated upload data
+    /// will be saved. Note, the current `InitUpload` should be deleted before being converted.
     pub fn into_upload<T: AsRef<Path>>(self, file_path: T) -> Result<NewUpload> {
         let pb = Path::to_str(file_path.as_ref())
             .map(str::to_string)
@@ -163,6 +181,7 @@ impl InitUpload {
         })
     }
 
+    /// Try deleting all `init_upload` records that are older than the current `UPLOAD_TIMEOUT_SECS`
     pub fn clear_outdated<T: GenericConnection>(conn: &T) -> Result<i64> {
         let stmt = "with deleted as (delete from init_upload where date_created < $1 returning 1) \
                     select count(*) from deleted";
@@ -176,6 +195,7 @@ impl InitUpload {
 }
 
 
+/// For initializing a new `Upload` record
 pub struct NewUpload {
     pub uuid: Uuid,
     pub content_hash: Vec<u8>,
@@ -200,6 +220,7 @@ impl NewUpload {
 }
 
 
+/// Maps to db table `upload`
 pub struct Upload {
     pub id: i32,
     pub uuid: Uuid,
@@ -230,12 +251,14 @@ impl FromRow for Upload {
     }
 }
 impl Upload {
+    /// Convert an `Upload`s `uuid` into a valid upload file-path
     pub fn new_file_path(uuid: &Uuid) -> Result<PathBuf> {
         use hex::ToHex;
         let base_dir = env::current_dir()?;
         Ok(base_dir.join("uploads").join(uuid.as_bytes().to_hex()))
     }
 
+    /// Return the `upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
         let stmt = "select id, uuid_, content_hash, file_size, file_name, file_path, nonce, access_password, date_created \
                     from upload \
@@ -244,11 +267,13 @@ impl Upload {
         try_query_one!(conn.query(stmt, &[uuid]), Upload)
     }
 
+    /// Check if an `upload` record with the given `file_name` exists
     pub fn file_name_exists<T: GenericConnection>(conn: &T, file_name: &str) -> Result<bool> {
         let stmt = "select exists(select 1 from upload where file_name = $1)";
         try_query_aggregate!(conn.query(stmt, &[&file_name]), bool)
     }
 
+    /// Return a collection of `Upload` instances that are older than `UPLOAD_MAX_LIFE_SECS`
     pub fn select_outdated<T: GenericConnection>(conn: &T) -> Result<Vec<Self>> {
         let stmt = "select id, uuid_, content_hash, file_size, file_name, file_path, nonce, access_password, date_created \
                     from upload \
@@ -261,6 +286,7 @@ impl Upload {
         try_query_vec!(conn.query(stmt, &[&cutoff]), Upload)
     }
 
+    /// Try deleting the current instance from the database, returning the number of items deleted
     pub fn delete<T: GenericConnection>(self, conn: &T) -> Result<i64> {
         let stmt = "with deleted as (delete from upload where id = $1 returning 1) \
                     select count(*) from deleted";

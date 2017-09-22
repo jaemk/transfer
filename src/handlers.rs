@@ -1,3 +1,6 @@
+/*!
+Route handlers
+*/
 use std::path;
 use std::io;
 use std::fs;
@@ -16,12 +19,14 @@ use models;
 use errors::*;
 
 
+/// Static file handler
 #[get("/<file..>")]
 fn static_files(file: path::PathBuf) -> Option<response::NamedFile> {
     response::NamedFile::open(path::Path::new("static/").join(file)).ok()
 }
 
 
+/// Index page with static files test
 #[get("/")]
 fn index<'a>() -> response::Response<'a> {
     let resp = response::Response::build()
@@ -32,43 +37,30 @@ fn index<'a>() -> response::Response<'a> {
 }
 
 
-#[derive(Serialize, Deserialize)]
-struct Message {
-    message: String,
-}
-
-
-#[get("/api/hello", format = "application/json")]
+#[get("/api/hello")]
 fn api_hello() -> Json<JsonValue> {
-    Json(json!({"message": "hey"}))
+    Json(json!({"message": "hello!"}))
 }
 
-#[post("/api/bye", data = "<msg>")]
-fn api_bye<'a>(msg: Json<Message>) -> Json<JsonValue> {
-    debug!("msg: {}", msg.message);
+#[post("/api/bye")]
+fn api_bye<'a>() -> Json<JsonValue> {
     Json(json!({"message": "bye!"}))
 }
 
 
+/// Upload Initialize post info (in transport formatting)
 #[derive(Deserialize)]
-struct UploadInfoPost {
-    iv: String,
+struct UploadInitPost {
+    nonce: String,
     file_name: String,
     file_size: u64,
     content_hash: String,
     access_password: String,
 }
-struct UploadInfo {
-    iv: Vec<u8>,
-    file_name: String,
-    file_size: i64,
-    content_hash: Vec<u8>,
-    access_password: Vec<u8>,
-}
-impl UploadInfoPost {
-    fn decode_hex(&self) -> Result<UploadInfo> {
-        Ok(UploadInfo {
-            iv: Vec::from_hex(&self.iv)?,
+impl UploadInitPost {
+    fn decode_hex(&self) -> Result<UploadInit> {
+        Ok(UploadInit {
+            nonce: Vec::from_hex(&self.nonce)?,
             file_name: self.file_name.to_owned(),
             file_size: self.file_size as i64,
             content_hash: Vec::from_hex(&self.content_hash)?,
@@ -77,9 +69,25 @@ impl UploadInfoPost {
     }
 }
 
+/// Upload post info converted/decoded
+struct UploadInit {
+    nonce: Vec<u8>,
+    file_name: String,
+    file_size: i64,
+    content_hash: Vec<u8>,
+    access_password: Vec<u8>,
+}
 
+
+/// Initialize a new upload
+///
+/// Supply all meta-data about an upload. Returning a unique key and a response-url
+/// fragment where the actual content should be posted
+/// e.g.)
+///   format!("{}{}?key={}", "http://localhost:3000", "/api/upload", "...long-key...")
+///
 #[post("/api/upload/init", data = "<info>")]
-fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let info = info.decode_hex().expect("bad upload info");
     if info.file_size > models::UPLOAD_LIMIT_BYTES {
         bail_fmt!(ErrorKind::BadRequest, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
@@ -93,32 +101,35 @@ fn api_upload_init(info: Json<UploadInfoPost>, conn: db::DbConn) -> Result<Json<
         file_name: info.file_name,
         content_hash: info.content_hash,
         file_size: info.file_size,
-        iv: info.iv,
+        nonce: info.nonce,
         access_password: access_auth.id,
     };
     new_init_upload.insert(&**conn)?;
 
     let resp = json!({
         "key": &uuid_hex,
-        "responseUrl": "/api/upload",
+        "response_url": "/api/upload",
     });
     Ok(Json(resp))
 }
 
 
+/// Upload identifier
 #[derive(FromForm)]
-struct UploadId{
+struct UploadKey{
     key: String,
 }
 
 
-
-#[post("/api/upload?<upload_info>", format = "text/plain", data = "<data>")]
-fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) -> Result<Json<JsonValue>> {
+/// Upload encrypted bytes to a specified upload-key
+///
+/// TODO: Add another upload size check
+#[post("/api/upload?<upload_key>", format = "text/plain", data = "<data>")]
+fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) -> Result<Json<JsonValue>> {
     use std::str::FromStr;
     let upload = {
         let trans = conn.transaction()?;
-        let uuid = Uuid::from_str(&upload_info.key)?;
+        let uuid = Uuid::from_str(&upload_key.key)?;
         let init_upload = models::InitUpload::find(&trans, &uuid)?;
         let file_path = models::Upload::new_file_path(&init_upload.uuid)?;
         init_upload.delete(&trans)?;
@@ -143,51 +154,64 @@ fn api_upload_file(upload_info: UploadId, data: rocket::Data, conn: db::DbConn) 
 }
 
 
+/// Download identifier and access/auth password
 #[derive(Deserialize)]
-struct DownloadIdAccess {
+struct DownloadKeyAccess {
     key: String,
     access_password: String,
 }
 
 
-#[post("/api/download/iv", data = "<download_info>")]
-fn api_download_iv(download_info: Json<DownloadIdAccess>, conn: db::DbConn) -> Result<Json<JsonValue>> {
-    let uuid_bytes = Vec::from_hex(&download_info.key)?;
+/// Initialize a download
+///
+/// Using a key and access-password, obtain the download meta-data (stuff
+/// needed for decryption).
+#[post("/api/download/init", data = "<download_key>")]
+fn api_download_init(download_key: Json<DownloadKeyAccess>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+    let uuid_bytes = Vec::from_hex(&download_key.key)?;
+    let access_pass_bytes = Vec::from_hex(&download_key.access_password)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
     let upload = models::Upload::find(&**conn, &uuid)?;
     let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
-    let access_pass_bytes = Vec::from_hex(&download_info.access_password)?;
     access_auth.verify(&access_pass_bytes)?;
-    Ok(Json(json!({"iv": upload.iv.as_slice().to_hex()})))
+    Ok(Json(json!({
+        "nonce": upload.nonce.to_hex(),
+    })))
 }
 
 
-#[post("/api/download", data = "<download_info>")]
-fn api_download(download_info: Json<DownloadIdAccess>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
-    let uuid_bytes = Vec::from_hex(&download_info.key)?;
+/// Download encrypted bytes
+#[post("/api/download", data = "<download_key>")]
+fn api_download(download_key: Json<DownloadKeyAccess>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
+    let uuid_bytes = Vec::from_hex(&download_key.key)?;
+    let access_pass_bytes = Vec::from_hex(&download_key.access_password)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
     let upload = models::Upload::find(&**conn, &uuid)?;
     let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
-    let access_pass_bytes = Vec::from_hex(&download_info.access_password)?;
     access_auth.verify(&access_pass_bytes)?;
     let file = fs::File::open(upload.file_path)?;
     Ok(response::Stream::from(file))
 }
 
 
+/// Download identifier and corresponding decrypted content hash
 #[derive(Deserialize)]
-struct DownloadIdHash {
+struct DownloadKeyHash {
     key: String,
     hash: String,
 }
 
 
-#[post("/api/download/name", data = "<download_info>")]
-fn api_download_name(download_info: Json<DownloadIdHash>, conn: db::DbConn) -> Result<Json<JsonValue>> {
-    let uuid_bytes = Vec::from_hex(&download_info.key)?;
+/// Obtain the decrypted file's name
+///
+/// Upload identifier and a matching hash of the decrypted content are required
+#[post("/api/download/name", data = "<download_key>")]
+fn api_download_name(download_key: Json<DownloadKeyHash>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+    let uuid_bytes = Vec::from_hex(&download_key.key)?;
+    let hash_bytes = Vec::from_hex(&download_key.hash)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
     let upload = models::Upload::find(&**conn, &uuid)?;
-    let hash_bytes = Vec::from_hex(&download_info.hash)?;
     auth::eq(&hash_bytes, &upload.content_hash)?;
     Ok(Json(json!({"file_name": &upload.file_name})))
 }
+

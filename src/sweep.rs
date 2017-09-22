@@ -1,3 +1,6 @@
+/*!
+Databse/filesystem cleanup routines
+*/
 use std::fs;
 use std::path;
 use std::thread;
@@ -13,12 +16,14 @@ use errors::*;
 const SWEEP_TIMEOUT_SECS: u64 = 60;
 
 
+/// Cleanup `init_upload` table, deleting expired items
 fn sweep_init_upload(conn: &postgres::Connection) -> Result<i64> {
     info!("Sweeping `init_upload` table");
     models::InitUpload::clear_outdated(conn)
 }
 
 
+/// Cleanup `upload` table, deleting expired items
 fn sweep_upload(conn: &postgres::Connection) -> Result<i64> {
     info!("Sweeping `upload` table and deleting associated files");
     let uploads = models::Upload::select_outdated(conn)?;
@@ -38,6 +43,7 @@ fn sweep_upload(conn: &postgres::Connection) -> Result<i64> {
 }
 
 
+/// Periodically check/clean the database
 pub fn db_sweeper() {
     loop {
         {
@@ -60,6 +66,7 @@ pub fn db_sweeper() {
 }
 
 
+/// Cleanup upload files that've been orphaned, no longer have an associated db record
 fn sweep_files(conn: &postgres::Connection, upload_dir: &path::Path) -> Result<u64> {
     use std::ffi::OsStr;
     let mut count = 0;
@@ -77,6 +84,7 @@ fn sweep_files(conn: &postgres::Connection, upload_dir: &path::Path) -> Result<u
 }
 
 
+/// Cleanup orphaned upload files
 pub fn sweep_fs<P: AsRef<path::Path>>(upload_dir: P) -> Result<u64> {
     let conn = db::init_conn()?;
     sweep_files(&conn, upload_dir.as_ref())

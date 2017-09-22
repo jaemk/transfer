@@ -1,3 +1,6 @@
+/*!
+Service initialization
+*/
 use std::env;
 use std::thread;
 
@@ -35,6 +38,7 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
     config.set_port(port);
     if workers > 0 { config.set_workers(workers); }
     if log { config.set_log_level(LoggingLevel::Normal); }
+
     rocket::custom(config, log)
         .manage(db::init_pool())
         .mount("/static/",  routes![handlers::static_files])
@@ -45,7 +49,7 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
                     handlers::api_bye,
                     handlers::api_upload_init,
                     handlers::api_upload_file,
-                    handlers::api_download_iv,
+                    handlers::api_download_init,
                     handlers::api_download,
                     handlers::api_download_name,
                 ]
