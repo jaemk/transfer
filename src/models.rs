@@ -12,7 +12,7 @@ use auth;
 use errors::*;
 
 
-pub const UPLOAD_LIMIT_BYTES: i64 = 100_000_000;
+pub const UPLOAD_LIMIT_BYTES: i64 = 200_000_000;
 pub const UPLOAD_TIMEOUT_SECS: i64 = 30;
 pub const UPLOAD_MAX_LIFE_SECS: i64 = 60 * 60 * 24;
 
