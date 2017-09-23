@@ -7,6 +7,7 @@ use std::thread;
 use std::time::Duration;
 
 use postgres;
+use uuid::Uuid;
 
 use db;
 use models;
@@ -69,12 +70,15 @@ pub fn db_sweeper() {
 /// Cleanup upload files that've been orphaned, no longer have an associated db record
 fn sweep_files(conn: &postgres::Connection, upload_dir: &path::Path) -> Result<u64> {
     use std::ffi::OsStr;
+    use std::str::FromStr;
     let mut count = 0;
     for file in fs::read_dir(upload_dir)? {
         let path = file?.path();
         if path.is_dir() { continue; }
         if let Some(file_name) = path.file_name().and_then(OsStr::to_str) {
-            if ! models::Upload::file_name_exists(conn, file_name)? {
+            if file_name.starts_with(".") { continue; }
+            let uuid = Uuid::from_str(file_name)?;
+            if ! models::Upload::uuid_exists(conn, &uuid)? {
                 fs::remove_file(&path)?;
                 count += 1;
             }

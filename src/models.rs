@@ -268,9 +268,9 @@ impl Upload {
     }
 
     /// Check if an `upload` record with the given `file_name` exists
-    pub fn file_name_exists<T: GenericConnection>(conn: &T, file_name: &str) -> Result<bool> {
-        let stmt = "select exists(select 1 from upload where file_name = $1)";
-        try_query_aggregate!(conn.query(stmt, &[&file_name]), bool)
+    pub fn uuid_exists<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<bool> {
+        let stmt = "select exists(select 1 from upload where uuid_ = $1)";
+        try_query_aggregate!(conn.query(stmt, &[&uuid]), bool)
     }
 
     /// Return a collection of `Upload` instances that are older than `UPLOAD_MAX_LIFE_SECS`
