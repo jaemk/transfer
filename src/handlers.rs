@@ -129,21 +129,19 @@ struct UploadKey{
 fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) -> Result<Json<JsonValue>> {
     use std::str::FromStr;
     let upload = {
-        let trans = conn.transaction()?;
+        let now = Utc::now();
         let uuid = Uuid::from_str(&upload_key.key)?;
+
+        let trans = conn.transaction()?;
         let init_upload = models::InitUpload::find(&trans, &uuid)?;
         let file_path = models::Upload::new_file_path(&init_upload.uuid)?;
         init_upload.delete(&trans)?;
-        debug!("Deleted `init_upload` id={}", init_upload.id);
-        // assert within timespan
-        let now = Utc::now();
         if now.signed_duration_since(init_upload.date_created) > Duration::seconds(models::UPLOAD_TIMEOUT_SECS) {
             error!("Upload request came too late");
             bail_fmt!(ErrorKind::BadRequest, "Upload request came to late");
         }
         let new_upload = init_upload.into_upload(&file_path)?;
         let upload = new_upload.insert(&trans)?;
-        debug!("Created `upload` id={}", upload.id);
         trans.commit()?;
         upload
     };
