@@ -110,11 +110,11 @@ export default {
       axios.post('/api/download/init', params, headers).then(resp => {
         const nonce = new Uint8Array(bytesFromHex(resp.data.nonce))
         console.log(`nonce: ${nonce}`)
-        const DLheaders = {headers: {'content-type': 'application/json'}, responseType: 'text'}
+        const DLheaders = {headers: {'content-type': 'application/json'}, responseType: 'arraybuffer'}
         axios.post('/api/download', params, DLheaders).then(resp => {
           console.log('post dl')
           console.log(resp)
-          const dataBytes = new Uint8Array(bytesFromHex(resp.data))
+          const dataBytes = resp.data
           console.log(dataBytes)
           const encryptPassBytes = new TextEncoder().encode(this.encryptPass)
           console.log('encrytion pass', encryptPassBytes)

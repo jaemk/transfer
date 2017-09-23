@@ -85,20 +85,20 @@ export default {
       let nonceHex = Buffer.from(nonce).toString('hex')
       let accessPassHex = Buffer.from(accessPassBytes).toString('hex')
 
-      const encryptUploadData = (data, key, respUrl) => {
-        console.log(`upload key: ${key}`)
-        console.log('freshbytes', data)
-
+      const encryptUploadData = (data, params, headers) => {
         const encryptedBytesCallback = (bytes) => {
-          console.log('encrypted bytes', bytes.length, bytes)
-          let bytesHex = Buffer.from(bytes).toString('hex')
-          axios.post(`${respUrl}?key=${key}`, bytesHex, {headers: {'content-type': 'text/plain'}})
-            .then(resp => {
-              console.log(resp.data)
-              console.log(`key: ${key}`)
-              this.uploaded = true
-              this.downloadUrl = `http://${window.location.host}/#/download?key=${key}`
-            }).catch(logerr)
+          params.size = bytes.length
+          axios.post('/api/upload/init', params, headers).then(resp => {
+            const key = resp.data.key
+            const respUrl = resp.data.response_url
+            axios.post(`${respUrl}?key=${key}`, bytes, {headers: {'content-type': 'application/octet-stream'}})
+              .then(resp => {
+                console.log(resp.data)
+                console.log(`key: ${key}`)
+                this.uploaded = true
+                this.downloadUrl = `http://${window.location.host}/#/download?key=${key}`
+              }).catch(logerr)
+          }).catch(logerr)
         }
         encrypt(data, nonce, encryptPassBytes, encryptedBytesCallback)
       }
@@ -114,11 +114,9 @@ export default {
         window.crypto.subtle.digest('SHA-256', data).then(contentHash => {
           const contentHashHex = Buffer.from(contentHash).toString('Hex')
           console.log('content hash', contentHashHex)
-          const params = {file_name: file.name, file_size: data.byteLength, content_hash: contentHashHex, nonce: nonceHex, access_password: accessPassHex}
+          const params = {file_name: file.name, content_hash: contentHashHex, nonce: nonceHex, access_password: accessPassHex}
           const headers = {headers: {'content-type': 'application/json'}}
-          axios.post('/api/upload/init', params, headers).then(resp => {
-            encryptUploadData(data, resp.data.key, resp.data.response_url)
-          }).catch(logerr)
+          encryptUploadData(data, params, headers)
         }).catch(logerr)
       }
       reader.readAsArrayBuffer(file)
