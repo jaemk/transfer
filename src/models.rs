@@ -95,21 +95,21 @@ pub struct NewInitUpload {
     pub uuid: Uuid,
     pub file_name: String,
     pub content_hash: Vec<u8>,
-    pub file_size: i64,
+    pub size: i64,
     pub nonce: Vec<u8>,
     pub access_password: i32,
 }
 impl NewInitUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<InitUpload> {
-        let stmt = "insert into init_upload (uuid_, file_name, content_hash, file_size, nonce, access_password) \
+        let stmt = "insert into init_upload (uuid_, file_name, content_hash, size_, nonce, access_password) \
                     values ($1, $2, $3, $4, $5, $6) \
                     returning id, date_created";
-        try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name, &self.content_hash, &self.file_size,
+        try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name, &self.content_hash, &self.size,
                                         &self.nonce, &self.access_password]);
                             InitUpload;
                             id: 0, date_created: 1;
                             uuid: self.uuid, file_name: self.file_name, content_hash: self.content_hash,
-                            file_size: self.file_size, nonce: self.nonce, access_password: self.access_password)
+                            size: self.size, nonce: self.nonce, access_password: self.access_password)
     }
 }
 
@@ -120,7 +120,7 @@ pub struct InitUpload {
     pub uuid: Uuid,
     pub file_name: String,
     pub content_hash: Vec<u8>,
-    pub file_size: i64,
+    pub size: i64,
     pub nonce: Vec<u8>,
     pub access_password: i32,
     pub date_created: DateTime<Utc>,
@@ -135,7 +135,7 @@ impl FromRow for InitUpload {
             uuid:               row.get(1),
             file_name:          row.get(2),
             content_hash:       row.get(3),
-            file_size:          row.get(4),
+            size:               row.get(4),
             nonce:              row.get(5),
             access_password:    row.get(6),
             date_created:       row.get(7),
@@ -145,7 +145,7 @@ impl FromRow for InitUpload {
 impl InitUpload {
     /// Return the `init_upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
-        let stmt = "select id, uuid_, file_name, content_hash, file_size, nonce, access_password, date_created \
+        let stmt = "select id, uuid_, file_name, content_hash, size_, nonce, access_password, date_created \
                     from init_upload \
                     where uuid_ = $1 \
                     limit 1";
@@ -173,7 +173,7 @@ impl InitUpload {
         Ok(NewUpload {
             uuid: self.uuid,
             content_hash: self.content_hash,
-            file_size: self.file_size,
+            size: self.size,
             file_name: self.file_name,
             file_path: pb,
             nonce: self.nonce,
@@ -199,7 +199,7 @@ impl InitUpload {
 pub struct NewUpload {
     pub uuid: Uuid,
     pub content_hash: Vec<u8>,
-    pub file_size: i64,
+    pub size: i64,
     pub file_name: String,
     pub file_path: String,
     pub nonce: Vec<u8>,
@@ -207,14 +207,14 @@ pub struct NewUpload {
 }
 impl NewUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<Upload> {
-        let stmt = "insert into upload (uuid_, content_hash, file_size, file_name, file_path, nonce, access_password) \
+        let stmt = "insert into upload (uuid_, content_hash, size_, file_name, file_path, nonce, access_password) \
                     values ($1, $2, $3, $4, $5, $6, $7) \
                     returning id, date_created";
-        try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.file_size, &self.file_name,
+        try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.size, &self.file_name,
                                                 &self.file_path, &self.nonce, &self.access_password]);
                             Upload;
                             id: 0, date_created: 1;
-                            uuid: self.uuid, content_hash: self.content_hash, file_size: self.file_size, file_name: self.file_name,
+                            uuid: self.uuid, content_hash: self.content_hash, size: self.size, file_name: self.file_name,
                             file_path: self.file_path, nonce: self.nonce, access_password: self.access_password)
     }
 }
@@ -225,7 +225,7 @@ pub struct Upload {
     pub id: i32,
     pub uuid: Uuid,
     pub content_hash: Vec<u8>,
-    pub file_size: i64,
+    pub size: i64,
     pub file_name: String,
     pub file_path: String,
     pub nonce: Vec<u8>,
@@ -241,7 +241,7 @@ impl FromRow for Upload {
             id:                 row.get(0),
             uuid:               row.get(1),
             content_hash:       row.get(2),
-            file_size:          row.get(3),
+            size:               row.get(3),
             file_name:          row.get(4),
             file_path:          row.get(5),
             nonce:              row.get(6),
@@ -260,7 +260,7 @@ impl Upload {
 
     /// Return the `upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
-        let stmt = "select id, uuid_, content_hash, file_size, file_name, file_path, nonce, access_password, date_created \
+        let stmt = "select id, uuid_, content_hash, size_, file_name, file_path, nonce, access_password, date_created \
                     from upload \
                     where uuid_ = $1 \
                     limit 1";
@@ -275,7 +275,7 @@ impl Upload {
 
     /// Return a collection of `Upload` instances that are older than `UPLOAD_MAX_LIFE_SECS`
     pub fn select_outdated<T: GenericConnection>(conn: &T) -> Result<Vec<Self>> {
-        let stmt = "select id, uuid_, content_hash, file_size, file_name, file_path, nonce, access_password, date_created \
+        let stmt = "select id, uuid_, content_hash, size_, file_name, file_path, nonce, access_password, date_created \
                     from upload \
                     where date_created < $1";
         let max_life = Duration::seconds(UPLOAD_MAX_LIFE_SECS);

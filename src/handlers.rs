@@ -53,7 +53,7 @@ fn api_bye<'a>() -> Json<JsonValue> {
 struct UploadInitPost {
     nonce: String,
     file_name: String,
-    file_size: u64,
+    size: u64,
     content_hash: String,
     access_password: String,
 }
@@ -62,7 +62,7 @@ impl UploadInitPost {
         Ok(UploadInit {
             nonce: Vec::from_hex(&self.nonce)?,
             file_name: self.file_name.to_owned(),
-            file_size: self.file_size as i64,
+            size: self.size as i64,
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
         })
@@ -73,7 +73,7 @@ impl UploadInitPost {
 struct UploadInit {
     nonce: Vec<u8>,
     file_name: String,
-    file_size: i64,
+    size: i64,
     content_hash: Vec<u8>,
     access_password: Vec<u8>,
 }
@@ -89,7 +89,8 @@ struct UploadInit {
 #[post("/api/upload/init", data = "<info>")]
 fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let info = info.decode_hex().expect("bad upload info");
-    if info.file_size > models::UPLOAD_LIMIT_BYTES {
+    if info.size > models::UPLOAD_LIMIT_BYTES {
+        error!("Upload too large");
         bail_fmt!(ErrorKind::BadRequest, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
     }
     let uuid = Uuid::new_v4();
@@ -100,7 +101,7 @@ fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<
         uuid: uuid,
         file_name: info.file_name,
         content_hash: info.content_hash,
-        file_size: info.file_size,
+        size: info.size,
         nonce: info.nonce,
         access_password: access_auth.id,
     };
@@ -176,6 +177,7 @@ fn api_download_init(download_key: Json<DownloadKeyAccess>, conn: db::DbConn) ->
     access_auth.verify(&access_pass_bytes)?;
     Ok(Json(json!({
         "nonce": upload.nonce.to_hex(),
+        "size": upload.size,
     })))
 }
 
