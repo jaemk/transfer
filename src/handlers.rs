@@ -125,9 +125,10 @@ struct UploadKey{
 /// Upload encrypted bytes to a specified upload-key
 ///
 /// TODO: Add another upload size check
-#[post("/api/upload?<upload_key>", format = "text/plain", data = "<data>")]
+#[post("/api/upload?<upload_key>", format = "application/octet-stream", data = "<data>")]
 fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) -> Result<Json<JsonValue>> {
     use std::str::FromStr;
+    use std::io::{Write, BufRead};
     let upload = {
         let now = Utc::now();
         let uuid = Uuid::from_str(&upload_key.key)?;
@@ -146,7 +147,38 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
         upload
     };
 
-    data.stream_to_file(&upload.file_path)?;
+    // In case they lied about the upload size twice...
+    let mut byte_count = 0;
+    let mut file = fs::File::create(&upload.file_path)?;
+    let mut stream = io::BufReader::new(data.open());
+    loop {
+        let n = {
+            let mut buf = stream.fill_buf()?;
+            file.write_all(&mut buf)?;
+            buf.len()
+        };
+        stream.consume(n);
+        if n == 0 { break; }
+        byte_count += n;
+        if byte_count as i64 > models::UPLOAD_LIMIT_BYTES {
+            error!("Upload too large");
+            // if the file deletion fails, the file will eventually be cleaned up
+            // by the `admin sweep-files` command
+            fs::remove_file(&upload.file_path).ok();
+            // drain the rest of the stream
+            loop {
+                let n = {
+                    let buf = stream.fill_buf()?;
+                    buf.len()
+                };
+                stream.consume(n);
+                if n == 0 { break; }
+            }
+            // delete the entry we just made
+            upload.delete(&**conn)?;
+            bail_fmt!(ErrorKind::BadRequest, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
+        }
+    }
 
     let resp = json!({"ok": "ok"});
     Ok(Json(resp))
