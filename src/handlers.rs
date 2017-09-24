@@ -11,7 +11,7 @@ use rocket::http;
 use rocket_contrib::{Json, Value as JsonValue};
 use hex::{FromHex, ToHex};
 use uuid::Uuid;
-use chrono::{Utc, Duration};
+use chrono::{Utc, Duration, DateTime};
 
 use db;
 use auth;
@@ -56,15 +56,22 @@ struct UploadInitPost {
     size: u64,
     content_hash: String,
     access_password: String,
+    download_limit: Option<u32>,
+    lifespan: Option<i64>,
 }
 impl UploadInitPost {
     fn decode_hex(&self) -> Result<UploadInit> {
+        let lifespan = Duration::seconds(self.lifespan.unwrap_or(models::UPLOAD_LIFESPAN_SECS_DEFAULT));
+        let expire_date = Utc::now().checked_add_signed(lifespan)
+            .ok_or_else(|| format_err!(ErrorKind::BadRequest, "Lifespan (seconds) too large"))?;
         Ok(UploadInit {
             nonce: Vec::from_hex(&self.nonce)?,
             file_name: self.file_name.to_owned(),
             size: self.size as i64,
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
+            download_limit: self.download_limit.map(|n| n as i32),
+            expire_date: expire_date,
         })
     }
 }
@@ -76,6 +83,8 @@ struct UploadInit {
     size: i64,
     content_hash: Vec<u8>,
     access_password: Vec<u8>,
+    download_limit: Option<i32>,
+    expire_date: DateTime<Utc>,
 }
 
 
@@ -88,24 +97,35 @@ struct UploadInit {
 ///
 #[post("/api/upload/init", data = "<info>")]
 fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
-    let info = info.decode_hex().expect("bad upload info");
+    let info = info.decode_hex()
+        .map_err(|_| format_err!(ErrorKind::BadRequest, "Invalid upload info"))?;
     if info.size > models::UPLOAD_LIMIT_BYTES {
         error!("Upload too large");
-        bail_fmt!(ErrorKind::BadRequest, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
+        bail_fmt!(ErrorKind::UploadTooLarge, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
     }
     let uuid = Uuid::new_v4();
     let uuid_hex = uuid.as_bytes().to_hex();
 
-    let access_auth = models::NewAuth::from_bytes(&info.access_password)?.insert(&**conn)?;
-    let new_init_upload = models::NewInitUpload {
-        uuid: uuid,
-        file_name: info.file_name,
-        content_hash: info.content_hash,
-        size: info.size,
-        nonce: info.nonce,
-        access_password: access_auth.id,
-    };
-    new_init_upload.insert(&**conn)?;
+    {
+        let trans = conn.transaction()?;
+        if ! models::Status::can_fit(&trans, info.size)? {
+            bail_fmt!(ErrorKind::OutOfSpace, "Server out of storage space");
+        }
+        models::Status::inc_upload(&trans, info.size)?;
+        let access_auth = models::NewAuth::from_bytes(&info.access_password)?.insert(&trans)?;
+        let new_init_upload = models::NewInitUpload {
+            uuid: uuid,
+            file_name: info.file_name,
+            content_hash: info.content_hash,
+            size: info.size,
+            nonce: info.nonce,
+            access_password: access_auth.id,
+            download_limit: info.download_limit,
+            expire_date: info.expire_date,
+        };
+        new_init_upload.insert(&trans)?;
+        trans.commit()?;
+    }
 
     let resp = json!({
         "key": &uuid_hex,
@@ -147,10 +167,11 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
         upload
     };
 
-    // In case they lied about the upload size twice...
+    // In case they lied about the upload size...
     let mut byte_count = 0;
     let mut file = fs::File::create(&upload.file_path)?;
     let mut stream = io::BufReader::new(data.open());
+    let stated_upload_size = upload.size;
     loop {
         let n = {
             let mut buf = stream.fill_buf()?;
@@ -160,8 +181,8 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
         stream.consume(n);
         if n == 0 { break; }
         byte_count += n;
-        if byte_count as i64 > models::UPLOAD_LIMIT_BYTES {
-            error!("Upload too large");
+        if byte_count as i64 > stated_upload_size {
+            error!("Upload larger than previously stated");
             // if the file deletion fails, the file will eventually be cleaned up
             // by the `admin sweep-files` command
             fs::remove_file(&upload.file_path).ok();
@@ -176,7 +197,7 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
             }
             // delete the entry we just made
             upload.delete(&**conn)?;
-            bail_fmt!(ErrorKind::BadRequest, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
+            bail_fmt!(ErrorKind::UploadTooLarge, "Upload larger than previously stated: {}", stated_upload_size)
         }
     }
 
@@ -218,10 +239,18 @@ fn api_download(download_key: Json<DownloadKeyAccess>, conn: db::DbConn) -> Resu
     let uuid_bytes = Vec::from_hex(&download_key.key)?;
     let access_pass_bytes = Vec::from_hex(&download_key.access_password)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
-    let upload = models::Upload::find(&**conn, &uuid)?;
-    let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
-    access_auth.verify(&access_pass_bytes)?;
-    let file = fs::File::open(upload.file_path)?;
+    let upload_path = {
+        let trans = conn.transaction()?;
+        let upload = models::Upload::find(&trans, &uuid)?;
+        let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
+        access_auth.verify(&access_pass_bytes)?;
+        // count downloads
+        // if limit.is_some() && n_downloads >= limit.unwrap() - 1 { bail DoesNotExist }
+        // create new Download
+        trans.commit()?;
+        upload.file_path
+    };
+    let file = fs::File::open(upload_path)?;
     Ok(response::Stream::from(file))
 }
 

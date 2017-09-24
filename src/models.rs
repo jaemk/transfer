@@ -12,9 +12,10 @@ use auth;
 use errors::*;
 
 
-pub const UPLOAD_LIMIT_BYTES: i64 = 200_000_000;
+pub const UPLOAD_LIMIT_BYTES: i64 = 200_000_000;  // 200mb
 pub const UPLOAD_TIMEOUT_SECS: i64 = 30;
-pub const UPLOAD_MAX_LIFE_SECS: i64 = 60 * 60 * 24;
+pub const UPLOAD_LIFESPAN_SECS_DEFAULT: i64 = 60 * 60 * 24;  // 1 day
+pub const MAX_COMBINED_UPLOAD_BYTES: i64 = 5_000_000_000;  // 5gb
 
 
 pub trait FromRow {
@@ -42,10 +43,10 @@ impl NewAuth {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<Auth> {
         let stmt = "insert into auth (salt, hash) values ($1, $2) \
                     returning id, date_created";
-        try_insert_to_model!(conn.query(stmt, &[&self.salt, &self.hash]);
-                             Auth;
-                             id: 0, date_created: 1;
-                             salt: self.salt, hash: self.hash)
+        try_query_to_model!(conn.query(stmt, &[&self.salt, &self.hash]);
+                            Auth;
+                            id: 0, date_created: 1;
+                            salt: self.salt, hash: self.hash)
     }
 }
 
@@ -98,18 +99,22 @@ pub struct NewInitUpload {
     pub size: i64,
     pub nonce: Vec<u8>,
     pub access_password: i32,
+    pub download_limit: Option<i32>,
+    pub expire_date: DateTime<Utc>,
 }
 impl NewInitUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<InitUpload> {
-        let stmt = "insert into init_upload (uuid_, file_name, content_hash, size_, nonce, access_password) \
-                    values ($1, $2, $3, $4, $5, $6) \
+        let stmt = "insert into init_upload \
+                    (uuid_, file_name, content_hash, size_, nonce, access_password, download_limit, expire_date) \
+                    values ($1, $2, $3, $4, $5, $6, $7, $8) \
                     returning id, date_created";
-        try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name, &self.content_hash, &self.size,
-                                        &self.nonce, &self.access_password]);
+        try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name, &self.content_hash, &self.size,
+                                        &self.nonce, &self.access_password, &self.download_limit, &self.expire_date]);
                             InitUpload;
                             id: 0, date_created: 1;
                             uuid: self.uuid, file_name: self.file_name, content_hash: self.content_hash,
-                            size: self.size, nonce: self.nonce, access_password: self.access_password)
+                            size: self.size, nonce: self.nonce, access_password: self.access_password,
+                            download_limit: self.download_limit, expire_date: self.expire_date)
     }
 }
 
@@ -123,6 +128,8 @@ pub struct InitUpload {
     pub size: i64,
     pub nonce: Vec<u8>,
     pub access_password: i32,
+    pub download_limit: Option<i32>,
+    pub expire_date: DateTime<Utc>,
     pub date_created: DateTime<Utc>,
 }
 impl FromRow for InitUpload {
@@ -138,14 +145,17 @@ impl FromRow for InitUpload {
             size:               row.get(4),
             nonce:              row.get(5),
             access_password:    row.get(6),
-            date_created:       row.get(7),
+            download_limit:     row.get(7),
+            expire_date:        row.get(8),
+            date_created:       row.get(9),
         }
     }
 }
 impl InitUpload {
     /// Return the `init_upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
-        let stmt = "select id, uuid_, file_name, content_hash, size_, nonce, access_password, date_created \
+        let stmt = "select \
+                    id, uuid_, file_name, content_hash, size_, nonce, access_password, download_limit, expire_date, date_created \
                     from init_upload \
                     where uuid_ = $1 \
                     limit 1";
@@ -154,9 +164,14 @@ impl InitUpload {
 
     /// Try deleting the current record from the database, returning the number of items deleted
     pub fn delete<T: GenericConnection>(&self, conn: &T) -> Result<i64> {
+        let trans = conn.transaction()?;
         let stmt = "with deleted as (delete from init_upload where id = $1 returning 1) \
                     select count(*) from deleted";
-        try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
+        let n_deleted = try_query_aggregate!(trans.query(stmt, &[&self.id]), i64)?;
+
+        let _status = Status::dec_upload(&trans, self.size)?;
+        trans.commit()?;
+        Ok(n_deleted)
     }
 
     /// Convert the current `InitUpload` into a `NewUpload`
@@ -178,6 +193,8 @@ impl InitUpload {
             file_path: pb,
             nonce: self.nonce,
             access_password: self.access_password,
+            download_limit: self.download_limit,
+            expire_date: self.expire_date,
         })
     }
 
@@ -204,18 +221,23 @@ pub struct NewUpload {
     pub file_path: String,
     pub nonce: Vec<u8>,
     pub access_password: i32,
+    pub download_limit: Option<i32>,
+    pub expire_date: DateTime<Utc>,
 }
 impl NewUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<Upload> {
-        let stmt = "insert into upload (uuid_, content_hash, size_, file_name, file_path, nonce, access_password) \
-                    values ($1, $2, $3, $4, $5, $6, $7) \
+        let stmt = "insert into upload \
+                    (uuid_, content_hash, size_, file_name, file_path, nonce, access_password, download_limit, expire_date) \
+                    values ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
                     returning id, date_created";
-        try_insert_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.size, &self.file_name,
-                                                &self.file_path, &self.nonce, &self.access_password]);
+        try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.size, &self.file_name,
+                                                &self.file_path, &self.nonce, &self.access_password,
+                                                &self.download_limit, &self.expire_date]);
                             Upload;
                             id: 0, date_created: 1;
                             uuid: self.uuid, content_hash: self.content_hash, size: self.size, file_name: self.file_name,
-                            file_path: self.file_path, nonce: self.nonce, access_password: self.access_password)
+                            file_path: self.file_path, nonce: self.nonce, access_password: self.access_password,
+                            download_limit: self.download_limit, expire_date: self.expire_date)
     }
 }
 
@@ -230,6 +252,8 @@ pub struct Upload {
     pub file_path: String,
     pub nonce: Vec<u8>,
     pub access_password: i32,
+    pub download_limit: Option<i32>,
+    pub expire_date: DateTime<Utc>,
     pub date_created: DateTime<Utc>,
 }
 impl FromRow for Upload {
@@ -246,7 +270,9 @@ impl FromRow for Upload {
             file_path:          row.get(5),
             nonce:              row.get(6),
             access_password:    row.get(7),
-            date_created:       row.get(8),
+            download_limit:     row.get(8),
+            expire_date:        row.get(9),
+            date_created:       row.get(10),
         }
     }
 }
@@ -260,7 +286,8 @@ impl Upload {
 
     /// Return the `upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
-        let stmt = "select id, uuid_, content_hash, size_, file_name, file_path, nonce, access_password, date_created \
+        let stmt = "select \
+                    id, uuid_, content_hash, size_, file_name, file_path, nonce, access_password, download_limit, expire_date, date_created \
                     from upload \
                     where uuid_ = $1 \
                     limit 1";
@@ -275,15 +302,12 @@ impl Upload {
 
     /// Return a collection of `Upload` instances that are older than `UPLOAD_MAX_LIFE_SECS`
     pub fn select_outdated<T: GenericConnection>(conn: &T) -> Result<Vec<Self>> {
-        let stmt = "select id, uuid_, content_hash, size_, file_name, file_path, nonce, access_password, date_created \
+        let stmt = "select \
+                    id, uuid_, content_hash, size_, file_name, file_path, nonce, access_password, download_limit, expire_date, date_created \
                     from upload \
-                    where date_created < $1";
-        let max_life = Duration::seconds(UPLOAD_MAX_LIFE_SECS);
+                    where expire_date < $1";
         let now = Utc::now();
-        let cutoff = now.checked_sub_signed(max_life)
-            .ok_or_else(|| format_err!(ErrorKind::InvalidDateTimeMathOffset, "Error subtracting {} secs from {:?}",
-                                       UPLOAD_MAX_LIFE_SECS, now))?;
-        try_query_vec!(conn.query(stmt, &[&cutoff]), Upload)
+        try_query_vec!(conn.query(stmt, &[&now]), Upload)
     }
 
     /// Try deleting the current instance from the database, returning the number of items deleted
@@ -291,6 +315,89 @@ impl Upload {
         let stmt = "with deleted as (delete from upload where id = $1 returning 1) \
                     select count(*) from deleted";
         try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
+    }
+}
+
+
+#[allow(dead_code)]
+pub struct Status {
+    id: i32,
+    upload_count: i64,
+    total_bytes: i64,
+    date_modified: DateTime<Utc>,
+}
+impl FromRow for Status {
+    fn table_name() -> &'static str {
+        "status"
+    }
+    fn from_row(row: postgres::rows::Row) -> Self {
+        Self {
+            id:             row.get(0),
+            upload_count:   row.get(1),
+            total_bytes:    row.get(2),
+            date_modified:  row.get(3),
+        }
+    }
+}
+impl Status {
+    pub fn init_load<T: GenericConnection>(conn: &T) -> Result<Self> {
+        let trans = conn.transaction()?;
+        let status = Self::load(&trans);
+        let status = match status {
+            Err(ref e) if e.does_not_exist() => Self::init(&trans),
+            status => status,
+        };
+        trans.commit()?;
+        status
+    }
+
+    pub fn load<T: GenericConnection>(conn: &T) -> Result<Self> {
+        let stmt = "select id, upload_count, total_bytes, date_modified from status";
+        try_query_one!(conn.query(stmt, &[]), Status)
+    }
+
+    pub fn init<T: GenericConnection>(conn: &T) -> Result<Self> {
+        let stmt = "insert into status (upload_count, total_bytes, date_modified) \
+                    values ($1, $2, $3) \
+                    returning id";
+        let now = Utc::now();
+        try_query_to_model!(conn.query(stmt, &[&0i64, &0i64, &now]);
+                            Status;
+                            id: 0;
+                            upload_count: 0, total_bytes: 0, date_modified: now)
+    }
+
+    pub fn can_fit<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<bool> {
+        let status = Self::load(conn)?;
+        Ok((status.total_bytes + n_bytes) < MAX_COMBINED_UPLOAD_BYTES)
+    }
+
+    pub fn inc_upload<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<Self> {
+        let stmt = "with updated as (update status set \
+                                        upload_count = upload_count + 1, \
+                                        total_bytes = total_bytes + $1, \
+                                        date_modified = $2 \
+                                        returning id, upload_count, total_bytes) \
+                    select * from updated";
+        let now = Utc::now();
+        try_query_to_model!(conn.query(stmt, &[&n_bytes, &now]);
+                            Status;
+                            id: 0, upload_count: 1, total_bytes: 2;
+                            date_modified: now)
+    }
+
+    pub fn dec_upload<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<Self> {
+        let stmt = "with updated as (update status set \
+                                        upload_count = upload_count - 1, \
+                                        total_bytes = total_bytes - $1, \
+                                        date_modified = $2 \
+                                        returning id, upload_count, total_bytes) \
+                    select * from updated";
+        let now = Utc::now();
+        try_query_to_model!(conn.query(stmt, &[&n_bytes, &now]);
+                            Status;
+                            id: 0, upload_count: 1, total_bytes: 2;
+                            date_modified: now)
     }
 }
 

@@ -35,7 +35,7 @@ macro_rules! bail_fmt {
 /// # macro syntax
 ///
 /// ```rust,ignore
-/// try_insert_to_model!(
+/// try_query_to_model!(
 ///     query-expr-to-execute ;
 ///     model-type ;
 ///     struct-field: row-index, * ;
@@ -50,14 +50,14 @@ macro_rules! bail_fmt {
 ///     fn create(self, conn: &Connection) -> Result<Paste> {
 ///         let stmt = "insert into pastes (key, content, content_type) values ($1, $2, $3) \
 ///                     returning id, date_created, date_viewed";
-///         try_insert_to_model!(conn.query(stmt, &[&self.key, &self.content, &self.content_type]) ;
+///         try_query_to_model!(conn.query(stmt, &[&self.key, &self.content, &self.content_type]) ;
 ///                              Paste ;
 ///                              id: 0, date_created: 1, date_viewed: 2 ;
 ///                              key: self.key, content: self.content, content_type: self.content_type)
 ///     }
 /// }
 /// ```
-macro_rules! try_insert_to_model {
+macro_rules! try_query_to_model {
     ($query:expr ;
      $model:ident ;
      $($rowvar:ident : $rowindex:expr),* ;
@@ -73,7 +73,7 @@ macro_rules! try_insert_to_model {
                             $var : $arg,
                          )*
                     }),
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "No rows returned from table: {}", $model::table_name()),
+                    None => bail_fmt!(ErrorKind::DoesNotExist, "`{}` not found", $model::table_name()),
                 }
             }
             Err(e) => {
@@ -112,10 +112,13 @@ macro_rules! try_query_vec {
 
 
 /// Takes the first row returned and converts it into the
-/// associated model type. If more than one row
-/// is returned, returns an `Error::MultipleRecords`.
+/// associated model type.
 ///
-/// Returns a `Result<Option<T>>` containing the given model
+/// Returns a `Result<T>` containing the given model
+///
+/// Errors:
+/// - If more than one row is returned, returns `ErrorKind::MultipleRecords`
+/// - If no rows are returned, returns `ErrorKind::DoesNotExist`
 ///
 /// # Example
 ///
@@ -135,7 +138,7 @@ macro_rules! try_query_one {
             Ok(rows) => {
                 let mut rows = rows.iter();
                 let record = match rows.next() {
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "No rows returned from table: {}", $model::table_name()),
+                    None => bail_fmt!(ErrorKind::DoesNotExist, "`{}` not found", $model::table_name()),
                     Some(row) => Ok($model::from_row(row)),
                 };
                 match rows.next() {
@@ -167,7 +170,7 @@ macro_rules! try_query_aggregate {
             }
             Ok(rows) => {
                 match rows.iter().next() {
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "No rows returned"),
+                    None => bail_fmt!(ErrorKind::DoesNotExist, "Record not found"),
                     Some(row) => {
                         let val: $row_type = row.get(0);
                         Ok(val)

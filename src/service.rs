@@ -12,7 +12,15 @@ use rocket::config::{Config, LoggingLevel};
 use handlers;
 use sweep;
 use db;
+use models;
 use errors::*;
+
+
+fn init_status() -> Result<()> {
+    let conn = db::init_conn()?;
+    models::Status::init_load(&conn)?;
+    Ok(())
+}
 
 
 pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
@@ -29,6 +37,8 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
             })
         .parse(&env::var("LOG").unwrap_or_default())
         .init()?;
+
+    init_status()?;
 
     let _ = thread::spawn(sweep::db_sweeper);
 

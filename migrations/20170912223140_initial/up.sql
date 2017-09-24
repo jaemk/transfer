@@ -13,6 +13,8 @@ create table init_upload (
     size_               bigint not null,
     nonce               bytea not null,
     access_password     integer not null unique references "auth" ("id") on delete cascade,
+    download_limit      integer,
+    expire_date         timestamp with time zone not null,
     date_created        timestamp with time zone not null default now()
 );
 
@@ -25,5 +27,21 @@ create table upload (
     file_path           text not null,
     nonce               bytea not null,
     access_password     integer not null unique references "auth" ("id") on delete cascade,
+    download_limit      integer,
+    expire_date         timestamp with time zone not null,
     date_created        timestamp with time zone not null default now()
 );
+
+create table download (
+    id                  serial primary key,
+    upload              integer not null unique references "upload" ("id") on delete cascade,
+    date_created        timestamp with time zone not null default now()
+);
+
+create table status (
+    id              serial primary key,
+    upload_count    bigint not null,
+    total_bytes     bigint not null,
+    date_modified   timestamp with time zone not null
+);
+

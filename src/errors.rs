@@ -44,6 +44,14 @@ error_chain! {
             description("Bad request")
             display("BadRequest: {}", s)
         }
+        UploadTooLarge(s: String) {
+            description("Upload too large")
+            display("UploadTooLarge: {}", s)
+        }
+        OutOfSpace(s: String) {
+            description("Out of storage space")
+            display("OutOfSpace: {}", s)
+        }
         UnequalBytes(s: String) {
             description("Unequal bytes")
             display("UnequalBytes Error: {}", s)
@@ -59,6 +67,15 @@ error_chain! {
         ConfirmationError(s: String) {
             description("Confirmation error")
             display("ConfirmationError: {}", s)
+        }
+    }
+}
+
+impl Error {
+    pub fn does_not_exist(&self) -> bool {
+        match *self.kind() {
+            ErrorKind::DoesNotExist(_) => true,
+            _ => false,
         }
     }
 }
@@ -79,6 +96,30 @@ impl<'r> rocket::response::Responder<'r> for Error {
                 let body = json!({"error": s}).to_string();
                 rocket::Response::build()
                     .status(rocket::http::Status::Unauthorized)
+                    .header(rocket::http::ContentType::JSON)
+                    .sized_body(std::io::Cursor::new(body))
+                    .ok()
+            }
+            OutOfSpace(ref s) => {
+                let body = json!({"error": s}).to_string();
+                rocket::Response::build()
+                    .status(rocket::http::Status::ServiceUnavailable)
+                    .header(rocket::http::ContentType::JSON)
+                    .sized_body(std::io::Cursor::new(body))
+                    .ok()
+            }
+            UploadTooLarge(ref s) => {
+                let body = json!({"error": s}).to_string();
+                rocket::Response::build()
+                    .status(rocket::http::Status::PayloadTooLarge)
+                    .header(rocket::http::ContentType::JSON)
+                    .sized_body(std::io::Cursor::new(body))
+                    .ok()
+            }
+            DoesNotExist(ref s) => {
+                let body = json!({"error": s}).to_string();
+                rocket::Response::build()
+                    .status(rocket::http::Status::NotFound)
                     .header(rocket::http::ContentType::JSON)
                     .sized_body(std::io::Cursor::new(body))
                     .ok()
