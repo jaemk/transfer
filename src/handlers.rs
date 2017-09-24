@@ -245,7 +245,8 @@ fn api_download(download_key: Json<DownloadKeyAccess>, conn: db::DbConn) -> Resu
         let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
         access_auth.verify(&access_pass_bytes)?;
         // count downloads
-        // if limit.is_some() && n_downloads >= limit.unwrap() - 1 { bail DoesNotExist }
+        // if limit.is_some() && n_downloads >= limit.unwrap() { bail DoesNotExist }
+        // check expire_date { bail DoesNotExist }
         // create new Download
         trans.commit()?;
         upload.file_path

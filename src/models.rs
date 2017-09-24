@@ -75,8 +75,7 @@ impl Auth {
     /// Return the `auth` record for the given `id` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, id: &i32) -> Result<Self> {
         let stmt = "select id, salt, hash, date_created from auth \
-                    where id = $1 \
-                    limit 1";
+                    where id = $1";
         try_query_one!(conn.query(stmt, &[id]), Auth)
     }
 
@@ -154,24 +153,17 @@ impl FromRow for InitUpload {
 impl InitUpload {
     /// Return the `init_upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
-        let stmt = "select \
-                    id, uuid_, file_name, content_hash, size_, nonce, access_password, download_limit, expire_date, date_created \
+        let stmt = "select * \
                     from init_upload \
-                    where uuid_ = $1 \
-                    limit 1";
+                    where uuid_ = $1";
         try_query_one!(conn.query(stmt, &[uuid]), InitUpload)
     }
 
     /// Try deleting the current record from the database, returning the number of items deleted
     pub fn delete<T: GenericConnection>(&self, conn: &T) -> Result<i64> {
-        let trans = conn.transaction()?;
         let stmt = "with deleted as (delete from init_upload where id = $1 returning 1) \
                     select count(*) from deleted";
-        let n_deleted = try_query_aggregate!(trans.query(stmt, &[&self.id]), i64)?;
-
-        let _status = Status::dec_upload(&trans, self.size)?;
-        trans.commit()?;
-        Ok(n_deleted)
+        try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
     }
 
     /// Convert the current `InitUpload` into a `NewUpload`
@@ -229,12 +221,12 @@ impl NewUpload {
         let stmt = "insert into upload \
                     (uuid_, content_hash, size_, file_name, file_path, nonce, access_password, download_limit, expire_date) \
                     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
-                    returning id, date_created";
+                    returning id, deleted, date_created";
         try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.size, &self.file_name,
                                                 &self.file_path, &self.nonce, &self.access_password,
                                                 &self.download_limit, &self.expire_date]);
                             Upload;
-                            id: 0, date_created: 1;
+                            id: 0, deleted: 1, date_created: 2;
                             uuid: self.uuid, content_hash: self.content_hash, size: self.size, file_name: self.file_name,
                             file_path: self.file_path, nonce: self.nonce, access_password: self.access_password,
                             download_limit: self.download_limit, expire_date: self.expire_date)
@@ -254,6 +246,7 @@ pub struct Upload {
     pub access_password: i32,
     pub download_limit: Option<i32>,
     pub expire_date: DateTime<Utc>,
+    pub deleted: bool,
     pub date_created: DateTime<Utc>,
 }
 impl FromRow for Upload {
@@ -272,7 +265,8 @@ impl FromRow for Upload {
             access_password:    row.get(7),
             download_limit:     row.get(8),
             expire_date:        row.get(9),
-            date_created:       row.get(10),
+            deleted:            row.get(10),
+            date_created:       row.get(11),
         }
     }
 }
@@ -286,33 +280,31 @@ impl Upload {
 
     /// Return the `upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
     pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<Self> {
-        let stmt = "select \
-                    id, uuid_, content_hash, size_, file_name, file_path, nonce, access_password, download_limit, expire_date, date_created \
+        let stmt = "select * \
                     from upload \
-                    where uuid_ = $1 \
-                    limit 1";
+                    where uuid_ = $1 and deleted = false";
         try_query_one!(conn.query(stmt, &[uuid]), Upload)
     }
 
-    /// Check if an `upload` record with the given `file_name` exists
-    pub fn uuid_exists<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<bool> {
-        let stmt = "select exists(select 1 from upload where uuid_ = $1)";
+    /// Check if an `upload` record with the given `file_name` exists and is available for download
+    pub fn uuid_exists_available<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<bool> {
+        let stmt = "select exists(select 1 from upload where uuid_ = $1 and deleted = false)";
         try_query_aggregate!(conn.query(stmt, &[&uuid]), bool)
     }
 
     /// Return a collection of `Upload` instances that are older than `UPLOAD_MAX_LIFE_SECS`
+    /// TODO: Also return uploads that are over their download limit
     pub fn select_outdated<T: GenericConnection>(conn: &T) -> Result<Vec<Self>> {
-        let stmt = "select \
-                    id, uuid_, content_hash, size_, file_name, file_path, nonce, access_password, download_limit, expire_date, date_created \
+        let stmt = "select * \
                     from upload \
                     where expire_date < $1";
         let now = Utc::now();
         try_query_vec!(conn.query(stmt, &[&now]), Upload)
     }
 
-    /// Try deleting the current instance from the database, returning the number of items deleted
-    pub fn delete<T: GenericConnection>(self, conn: &T) -> Result<i64> {
-        let stmt = "with deleted as (delete from upload where id = $1 returning 1) \
+    /// Try marking the current instance deleted, returning the number of items marked
+    pub fn delete<T: GenericConnection>(&self, conn: &T) -> Result<i64> {
+        let stmt = "with deleted as (update upload where id = $1 set deleted = true returning 1) \
                     select count(*) from deleted";
         try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
     }

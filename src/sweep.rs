@@ -36,7 +36,10 @@ fn sweep_upload(conn: &postgres::Connection) -> Result<i64> {
         }
         let id = upload.id;
         match upload.delete(conn) {
-            Ok(n) => sum += n,
+            Ok(n) => {
+                sum += n;
+                models::Status::dec_upload(conn, upload.size)?;
+            }
             Err(e) => error!("Error deleting upload with id={}, {}, continuing...", id, e),
         }
     }
@@ -78,7 +81,7 @@ fn sweep_files(conn: &postgres::Connection, upload_dir: &path::Path) -> Result<u
         if let Some(file_name) = path.file_name().and_then(OsStr::to_str) {
             if file_name.starts_with(".") { continue; }
             let uuid = Uuid::from_str(file_name)?;
-            if ! models::Upload::uuid_exists(conn, &uuid)? {
+            if ! models::Upload::uuid_exists_available(conn, &uuid)? {
                 fs::remove_file(&path)?;
                 count += 1;
             }

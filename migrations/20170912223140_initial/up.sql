@@ -29,6 +29,7 @@ create table upload (
     access_password     integer not null unique references "auth" ("id") on delete cascade,
     download_limit      integer,
     expire_date         timestamp with time zone not null,
+    deleted             boolean default false,
     date_created        timestamp with time zone not null default now()
 );
 
