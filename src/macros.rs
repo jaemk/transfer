@@ -73,7 +73,7 @@ macro_rules! try_query_to_model {
                             $var : $arg,
                          )*
                     }),
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "`{}` not found", $model::table_name()),
+                    None => bail_fmt!(ErrorKind::DoesNotExist, "{} not found", $model::table_name()),
                 }
             }
             Err(e) => {
@@ -138,7 +138,7 @@ macro_rules! try_query_one {
             Ok(rows) => {
                 let mut rows = rows.iter();
                 let record = match rows.next() {
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "`{}` not found", $model::table_name()),
+                    None => bail_fmt!(ErrorKind::DoesNotExist, "{} not found", $model::table_name()),
                     Some(row) => Ok($model::from_row(row)),
                 };
                 match rows.next() {

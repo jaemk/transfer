@@ -35,7 +35,7 @@ create table upload (
 
 create table download (
     id                  serial primary key,
-    upload              integer not null unique references "upload" ("id") on delete cascade,
+    upload              integer not null references "upload" ("id") on delete cascade,
     date_created        timestamp with time zone not null default now()
 );
 

@@ -208,9 +208,23 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
 
 /// Download identifier and access/auth password
 #[derive(Deserialize)]
-struct DownloadKeyAccess {
+struct DownloadKeyAccessPost {
     key: String,
     access_password: String,
+}
+impl DownloadKeyAccessPost {
+    fn decode_hex(&self) -> Result<DownloadKeyAccess> {
+        use std::str::FromStr;
+        Ok(DownloadKeyAccess{
+            uuid: Uuid::from_str(&self.key)?,
+            access_password: Vec::from_hex(&self.access_password)?,
+        })
+    }
+}
+
+struct DownloadKeyAccess {
+    uuid: Uuid,
+    access_password: Vec<u8>,
 }
 
 
@@ -219,13 +233,28 @@ struct DownloadKeyAccess {
 /// Using a key and access-password, obtain the download meta-data (stuff
 /// needed for decryption).
 #[post("/api/download/init", data = "<download_key>")]
-fn api_download_init(download_key: Json<DownloadKeyAccess>, conn: db::DbConn) -> Result<Json<JsonValue>> {
-    let uuid_bytes = Vec::from_hex(&download_key.key)?;
-    let access_pass_bytes = Vec::from_hex(&download_key.access_password)?;
-    let uuid = Uuid::from_bytes(&uuid_bytes)?;
-    let upload = models::Upload::find(&**conn, &uuid)?;
-    let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
-    access_auth.verify(&access_pass_bytes)?;
+fn api_download_init(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+    let now = Utc::now();
+    let download_key = download_key.decode_hex()
+        .map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?;
+
+    let upload = {
+        let trans = conn.transaction()?;
+        let upload = models::Upload::find(&trans, &download_key.uuid)?;
+        let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
+        access_auth.verify(&download_key.access_password)?;
+        let n_downloads = upload.download_count(&trans)? as i32;
+        if let Some(limit) = upload.download_limit {
+            if n_downloads >= limit {
+                bail_fmt!(ErrorKind::DoesNotExist, "upload not found");
+            }
+        }
+        if now >= upload.expire_date {
+            bail_fmt!(ErrorKind::DoesNotExist, "upload not found");
+        }
+        trans.commit()?;
+        upload
+    };
     Ok(Json(json!({
         "nonce": upload.nonce.to_hex(),
         "size": upload.size,
@@ -235,23 +264,30 @@ fn api_download_init(download_key: Json<DownloadKeyAccess>, conn: db::DbConn) ->
 
 /// Download encrypted bytes
 #[post("/api/download", data = "<download_key>")]
-fn api_download(download_key: Json<DownloadKeyAccess>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
-    let uuid_bytes = Vec::from_hex(&download_key.key)?;
-    let access_pass_bytes = Vec::from_hex(&download_key.access_password)?;
-    let uuid = Uuid::from_bytes(&uuid_bytes)?;
-    let upload_path = {
+fn api_download(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
+    let now = Utc::now();
+    let download_key = download_key.decode_hex()
+        .map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?;
+    let upload = {
         let trans = conn.transaction()?;
-        let upload = models::Upload::find(&trans, &uuid)?;
+        let upload = models::Upload::find(&trans, &download_key.uuid)?;
         let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
-        access_auth.verify(&access_pass_bytes)?;
-        // count downloads
-        // if limit.is_some() && n_downloads >= limit.unwrap() { bail DoesNotExist }
-        // check expire_date { bail DoesNotExist }
-        // create new Download
+        access_auth.verify(&download_key.access_password)?;
+        let n_downloads = upload.download_count(&trans)? as i32;
+        if let Some(limit) = upload.download_limit {
+            if n_downloads >= limit {
+                bail_fmt!(ErrorKind::DoesNotExist, "upload not found");
+            }
+        }
+        if now >= upload.expire_date {
+            bail_fmt!(ErrorKind::DoesNotExist, "upload not found");
+        }
+        let new_download = models::NewDownload { upload: upload.id };
+        new_download.insert(&trans)?;
         trans.commit()?;
-        upload.file_path
+        upload
     };
-    let file = fs::File::open(upload_path)?;
+    let file = fs::File::open(upload.file_path)?;
     Ok(response::Stream::from(file))
 }
 

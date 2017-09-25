@@ -297,16 +297,62 @@ impl Upload {
     pub fn select_outdated<T: GenericConnection>(conn: &T) -> Result<Vec<Self>> {
         let stmt = "select * \
                     from upload \
-                    where expire_date < $1";
+                    where expire_date <= $1 \
+                    or id in \
+                        (with dl_counts as \
+                            (select upload, min(download_limit) as download_limit, count(*) \
+                                from download join upload on (upload.id = download.upload) \
+                                where deleted = false \
+                                group by upload) \
+                            select upload from dl_counts where count >= download_limit)";
         let now = Utc::now();
         try_query_vec!(conn.query(stmt, &[&now]), Upload)
     }
 
     /// Try marking the current instance deleted, returning the number of items marked
     pub fn delete<T: GenericConnection>(&self, conn: &T) -> Result<i64> {
-        let stmt = "with deleted as (update upload where id = $1 set deleted = true returning 1) \
+        let stmt = "with deleted as (update upload set deleted = true where id = $1 returning 1) \
                     select count(*) from deleted";
         try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
+    }
+
+    pub fn download_count<T: GenericConnection>(&self, conn: &T) -> Result<i64> {
+        let stmt = "select count(*) from download where upload = $1";
+        try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
+    }
+}
+
+
+pub struct NewDownload {
+    pub upload: i32,
+}
+impl NewDownload {
+    pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<Download> {
+        let stmt = "insert into download (upload) values ($1) returning id, date_created";
+        try_query_to_model!(conn.query(stmt, &[&self.upload]);
+                            Download;
+                            id: 0, date_created: 1;
+                            upload: self.upload)
+    }
+}
+
+
+pub struct Download {
+    pub id: i32,
+    pub upload: i32,
+    pub date_created: DateTime<Utc>,
+}
+impl FromRow for Download {
+    fn table_name() -> &'static str {
+        "download"
+    }
+
+    fn from_row(row: postgres::rows::Row) -> Self {
+        Self {
+            id:             row.get(0),
+            upload:         row.get(1),
+            date_created:   row.get(2),
+        }
     }
 }
 
