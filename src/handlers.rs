@@ -111,7 +111,6 @@ fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<
         if ! models::Status::can_fit(&trans, info.size)? {
             bail_fmt!(ErrorKind::OutOfSpace, "Server out of storage space");
         }
-        models::Status::inc_upload(&trans, info.size)?;
         let access_auth = models::NewAuth::from_bytes(&info.access_password)?.insert(&trans)?;
         let new_init_upload = models::NewInitUpload {
             uuid: uuid,
@@ -154,6 +153,10 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
 
         let trans = conn.transaction()?;
         let init_upload = models::InitUpload::find(&trans, &uuid)?;
+        if ! models::Status::can_fit(&trans, init_upload.size)? {
+            bail_fmt!(ErrorKind::OutOfSpace, "Server out of storage space");
+        }
+        models::Status::inc_upload(&trans, init_upload.size)?;
         let file_path = models::Upload::new_file_path(&init_upload.uuid)?;
         init_upload.delete(&trans)?;
         if ! init_upload.still_valid(&now) {
