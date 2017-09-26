@@ -38,8 +38,10 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
         .parse(&env::var("LOG").unwrap_or_default())
         .init()?;
 
+    // make sure `status` record is initialized
     init_status()?;
 
+    // spawn our cleaning thread
     let _ = thread::spawn(sweep::db_sweeper);
 
     info!("** Listening on {} **", host);
@@ -61,7 +63,7 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
                     handlers::api_upload_file,
                     handlers::api_download_init,
                     handlers::api_download,
-                    handlers::api_download_name,
+                    handlers::api_download_confirm,
                 ]
             )
         .launch();

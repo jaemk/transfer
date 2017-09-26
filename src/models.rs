@@ -16,6 +16,7 @@ pub const UPLOAD_LIMIT_BYTES: i64 = 200_000_000;  // 200mb
 pub const UPLOAD_TIMEOUT_SECS: i64 = 30;
 pub const UPLOAD_LIFESPAN_SECS_DEFAULT: i64 = 60 * 60 * 24;  // 1 day
 pub const MAX_COMBINED_UPLOAD_BYTES: i64 = 5_000_000_000;  // 5gb
+pub const DOWNLOAD_TIMEOUT_SECS: i64 = 120;
 
 
 pub trait FromRow {
@@ -190,6 +191,10 @@ impl InitUpload {
         })
     }
 
+    pub fn still_valid(&self, dt: &DateTime<Utc>) -> bool {
+        dt.signed_duration_since(self.date_created) <= Duration::seconds(UPLOAD_TIMEOUT_SECS)
+    }
+
     /// Try deleting all `init_upload` records that are older than the current `UPLOAD_TIMEOUT_SECS`
     pub fn clear_outdated<T: GenericConnection>(conn: &T) -> Result<i64> {
         let stmt = "with deleted as (delete from init_upload where date_created < $1 returning 1) \
@@ -323,6 +328,109 @@ impl Upload {
 }
 
 
+/// Download type (usage) for `InitDownload`s
+#[derive(Debug, Eq, PartialEq)]
+pub enum DownloadType {
+    Content,
+    Confirm,
+}
+impl DownloadType {
+    pub fn as_str(&self) -> &'static str {
+        use self::DownloadType::*;
+        match *self {
+            Content => "content",
+            Confirm => "confirm",
+        }
+    }
+}
+
+
+/// For initializing a new `InitDownload` record
+pub struct NewInitDownload {
+    pub uuid: Uuid,
+    pub usage: String,
+    pub upload: i32,
+}
+impl NewInitDownload {
+    pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<InitDownload> {
+        let stmt = "insert into init_download \
+                    (uuid_, usage, upload) \
+                    values ($1, $2, $3) \
+                    returning id, date_created";
+        try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.usage, &self.upload]);
+                            InitDownload;
+                            id: 0, date_created: 1;
+                            uuid: self.uuid, usage: self.usage, upload: self.upload)
+    }
+}
+
+
+/// Maps to db table `init_download`
+pub struct InitDownload {
+    pub id: i32,
+    pub uuid: Uuid,
+    pub usage: String,
+    pub upload: i32,
+    pub date_created: DateTime<Utc>,
+}
+impl FromRow for InitDownload {
+    fn table_name() -> &'static str {
+        "init_download"
+    }
+
+    fn from_row(row: postgres::rows::Row) -> Self {
+        Self {
+            id:             row.get(0),
+            uuid:           row.get(1),
+            usage:          row.get(2),
+            upload:         row.get(3),
+            date_created:   row.get(4),
+        }
+    }
+}
+impl InitDownload {
+    /// Return the `init_download` record for the given `uuid` or `ErrorKind::DoesNotExist`
+    pub fn find<T: GenericConnection>(conn: &T, uuid: &Uuid, usage: DownloadType) -> Result<Self> {
+        let stmt = "select * \
+                    from init_download \
+                    where uuid_ = $1 and usage = $2";
+        let usage = usage.as_str();
+        try_query_one!(conn.query(stmt, &[uuid, &usage]), InitDownload)
+    }
+
+    /// Try deleting the current record from the database, returning the number of items deleted
+    pub fn delete<T: GenericConnection>(&self, conn: &T) -> Result<i64> {
+        let stmt = "with deleted as (delete from init_download where id = $1 returning 1) \
+                    select count(*) from deleted";
+        try_query_aggregate!(conn.query(stmt, &[&self.id]), i64)
+    }
+
+    /// Try fetching the associated `Upload`
+    pub fn get_upload<T: GenericConnection>(&self, conn: &T) -> Result<Upload> {
+        let stmt = "select * from upload where id = $1";
+        try_query_one!(conn.query(stmt, &[&self.upload]), Upload)
+    }
+
+    /// Check if download initializer is still valid
+    pub fn still_valid(&self, dt: &DateTime<Utc>) -> bool {
+        dt.signed_duration_since(self.date_created) <= Duration::seconds(DOWNLOAD_TIMEOUT_SECS)
+    }
+
+    /// Try deleting all `init_download` records that are older than the current `DOWNLOAD_TIMEOUT_SECS`
+    pub fn clear_outdated<T: GenericConnection>(conn: &T) -> Result<i64> {
+        let stmt = "with deleted as (delete from init_download where date_created < $1 returning 1) \
+                    select count(*) from deleted";
+        let timeout = Duration::seconds(DOWNLOAD_TIMEOUT_SECS);
+        let now = Utc::now();
+        let cutoff = now.checked_sub_signed(timeout)
+            .ok_or_else(|| format_err!(ErrorKind::InvalidDateTimeMathOffset, "Error subtracting {} secs from {:?}",
+                                       DOWNLOAD_TIMEOUT_SECS, now))?;
+        try_query_aggregate!(conn.query(stmt, &[&cutoff]), i64)
+    }
+}
+
+
+/// For initializing a new `Download` record
 pub struct NewDownload {
     pub upload: i32,
 }
@@ -337,6 +445,7 @@ impl NewDownload {
 }
 
 
+/// Maps to db table `download`
 pub struct Download {
     pub id: i32,
     pub upload: i32,
@@ -357,6 +466,7 @@ impl FromRow for Download {
 }
 
 
+/// Maps to db table `status`
 #[allow(dead_code)]
 pub struct Status {
     id: i32,
@@ -378,6 +488,7 @@ impl FromRow for Status {
     }
 }
 impl Status {
+    /// Fetch or initialize the single `status` table record
     pub fn init_load<T: GenericConnection>(conn: &T) -> Result<Self> {
         let trans = conn.transaction()?;
         let status = Self::load(&trans);
@@ -405,11 +516,13 @@ impl Status {
                             upload_count: 0, total_bytes: 0, date_modified: now)
     }
 
+    /// Check if we can hold `n` more bytes, staying under `MAX_COMBINED_UPLOAD_BYTES`
     pub fn can_fit<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<bool> {
         let status = Self::load(conn)?;
         Ok((status.total_bytes + n_bytes) < MAX_COMBINED_UPLOAD_BYTES)
     }
 
+    /// Increment `status` record count and running total of uploaded bytes
     pub fn inc_upload<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<Self> {
         let stmt = "with updated as (update status set \
                                         upload_count = upload_count + 1, \
@@ -424,6 +537,7 @@ impl Status {
                             date_modified: now)
     }
 
+    /// Decrement `status` record count and running total of uploaded bytes
     pub fn dec_upload<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<Self> {
         let stmt = "with updated as (update status set \
                                         upload_count = upload_count - 1, \

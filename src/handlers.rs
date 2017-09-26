@@ -98,7 +98,7 @@ struct UploadInit {
 #[post("/api/upload/init", data = "<info>")]
 fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let info = info.decode_hex()
-        .map_err(|_| format_err!(ErrorKind::BadRequest, "Invalid upload info"))?;
+        .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     if info.size > models::UPLOAD_LIMIT_BYTES {
         error!("Upload too large");
         bail_fmt!(ErrorKind::UploadTooLarge, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
@@ -129,7 +129,6 @@ fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<
 
     let resp = json!({
         "key": &uuid_hex,
-        "response_url": "/api/upload",
     });
     Ok(Json(resp))
 }
@@ -157,7 +156,7 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
         let init_upload = models::InitUpload::find(&trans, &uuid)?;
         let file_path = models::Upload::new_file_path(&init_upload.uuid)?;
         init_upload.delete(&trans)?;
-        if now.signed_duration_since(init_upload.date_created) > Duration::seconds(models::UPLOAD_TIMEOUT_SECS) {
+        if ! init_upload.still_valid(&now) {
             error!("Upload request came too late");
             bail_fmt!(ErrorKind::BadRequest, "Upload request came to late");
         }
@@ -236,9 +235,9 @@ struct DownloadKeyAccess {
 fn api_download_init(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let now = Utc::now();
     let download_key = download_key.decode_hex()
-        .map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?;
+        .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
 
-    let upload = {
+    let (upload, init_download_content, init_download_confirm) = {
         let trans = conn.transaction()?;
         let upload = models::Upload::find(&trans, &download_key.uuid)?;
         let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
@@ -252,12 +251,24 @@ fn api_download_init(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn
         if now >= upload.expire_date {
             bail_fmt!(ErrorKind::DoesNotExist, "upload not found");
         }
+        let init_download_content = models::NewInitDownload {
+            uuid: Uuid::new_v4(),
+            usage: String::from("content"),
+            upload: upload.id,
+        }.insert(&trans)?;
+        let init_download_confirm = models::NewInitDownload {
+            uuid: Uuid::new_v4(),
+            usage: String::from("confirm"),
+            upload: upload.id,
+        }.insert(&trans)?;
         trans.commit()?;
-        upload
+        (upload, init_download_content, init_download_confirm)
     };
     Ok(Json(json!({
         "nonce": upload.nonce.to_hex(),
         "size": upload.size,
+        "download_key": init_download_content.uuid.as_bytes().to_hex(),
+        "confirm_key": init_download_confirm.uuid.as_bytes().to_hex(),
     })))
 }
 
@@ -267,10 +278,11 @@ fn api_download_init(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn
 fn api_download(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
     let now = Utc::now();
     let download_key = download_key.decode_hex()
-        .map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?;
+        .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     let upload = {
         let trans = conn.transaction()?;
-        let upload = models::Upload::find(&trans, &download_key.uuid)?;
+        let init_download = models::InitDownload::find(&trans, &download_key.uuid, models::DownloadType::Content)?;
+        let upload = init_download.get_upload(&trans)?;
         let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
         access_auth.verify(&download_key.access_password)?;
         let n_downloads = upload.download_count(&trans)? as i32;
@@ -284,6 +296,7 @@ fn api_download(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> 
         }
         let new_download = models::NewDownload { upload: upload.id };
         new_download.insert(&trans)?;
+        init_download.delete(&trans)?;
         trans.commit()?;
         upload
     };
@@ -303,13 +316,20 @@ struct DownloadKeyHash {
 /// Obtain the decrypted file's name
 ///
 /// Upload identifier and a matching hash of the decrypted content are required
-#[post("/api/download/name", data = "<download_key>")]
-fn api_download_name(download_key: Json<DownloadKeyHash>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+#[post("/api/download/confirm", data = "<download_key>")]
+fn api_download_confirm(download_key: Json<DownloadKeyHash>, conn: db::DbConn) -> Result<Json<JsonValue>> {
     let uuid_bytes = Vec::from_hex(&download_key.key)?;
     let hash_bytes = Vec::from_hex(&download_key.hash)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
-    let upload = models::Upload::find(&**conn, &uuid)?;
-    auth::eq(&hash_bytes, &upload.content_hash)?;
+    let upload = {
+        let trans = conn.transaction()?;
+        let init_download = models::InitDownload::find(&**conn, &uuid, models::DownloadType::Confirm)?;
+        let upload = init_download.get_upload(&trans)?;
+        auth::eq(&hash_bytes, &upload.content_hash)?;
+        init_download.delete(&trans)?;
+        trans.commit()?;
+        upload
+    };
     Ok(Json(json!({"file_name": &upload.file_name})))
 }
 

@@ -33,6 +33,14 @@ create table upload (
     date_created        timestamp with time zone not null default now()
 );
 
+create table init_download (
+    id              serial primary key,
+    uuid_           uuid unique not null,
+    usage           text not null,
+    upload          integer not null references "upload" ("id") on delete cascade,
+    date_created    timestamp with time zone not null default now()
+);
+
 create table download (
     id                  serial primary key,
     upload              integer not null references "upload" ("id") on delete cascade,

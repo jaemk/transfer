@@ -24,6 +24,13 @@ fn sweep_init_upload(conn: &postgres::Connection) -> Result<i64> {
 }
 
 
+/// Cleanup `init_download` table, deleting expire items
+fn sweep_init_download(conn: &postgres::Connection) -> Result<i64> {
+    info!("Sweeping `init_download` table");
+    models::InitDownload::clear_outdated(conn)
+}
+
+
 /// Cleanup `upload` table, deleting expired items
 fn sweep_upload(conn: &postgres::Connection) -> Result<i64> {
     info!("Sweeping `upload` table and deleting associated files");
@@ -57,6 +64,10 @@ pub fn db_sweeper() {
                     match sweep_init_upload(&conn) {
                         Err(e) => error!("InitUpload Sweeper Error: {}", e),
                         Ok(n) => info!("Sweeper cleaned out {} old `init_upload` items", n),
+                    };
+                    match sweep_init_download(&conn) {
+                        Err(e) => error!("InitDownload Sweeper Error: {}", e),
+                        Ok(n) => info!("Sweeper cleaned out {} old `init_download` items", n),
                     };
                     match sweep_upload(&conn) {
                         Err(e) => error!("Upload Sweeper Error: {}", e),
