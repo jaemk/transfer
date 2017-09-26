@@ -90,8 +90,8 @@ export default {
           params.size = bytes.length
           axios.post('/api/upload/init', params, headers).then(resp => {
             const key = resp.data.key
-            const respUrl = resp.data.response_url
-            axios.post(`${respUrl}?key=${key}`, bytes, {headers: {'content-type': 'application/octet-stream'}})
+            console.log(`got key ${key}`)
+            axios.post(`/api/upload?key=${key}`, bytes, {headers: {'content-type': 'application/octet-stream'}})
               .then(resp => {
                 console.log(resp.data)
                 console.log(`key: ${key}`)

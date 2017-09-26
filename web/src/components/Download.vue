@@ -87,13 +87,14 @@ export default {
         console.log('encypt pass required')
         return
       }
-      const decryptedBytesCallback = (bytes) => {
+      const decryptedBytesCallback = (bytes, confirmKey) => {
         window.crypto.subtle.digest('SHA-256', bytes).then(contentHash => {
           const hex = Buffer.from(contentHash).toString('hex')
           console.log('decrypted bytes hex', hex)
-          const params = {key: this.key, hash: hex}
+          const params = {key: confirmKey, hash: hex}
+          console.log(`params: ${params}`)
           const headers = {headers: {'content-type': 'application/json'}}
-          axios.post('/api/download/name', params, headers).then(resp => {
+          axios.post('/api/download/confirm', params, headers).then(resp => {
             const blob = new Blob([bytes], {type: 'application/octet-stream'})
             FileSaver.saveAs(blob, resp.data.file_name)
           }).catch(logerr)
@@ -111,6 +112,9 @@ export default {
         const nonce = new Uint8Array(bytesFromHex(resp.data.nonce))
         console.log(`nonce: ${nonce}`)
         const DLheaders = {headers: {'content-type': 'application/json'}, responseType: 'arraybuffer'}
+        params.key = resp.data.download_key
+        const confirmKey = resp.data.confirm_key
+        console.log(params)
         axios.post('/api/download', params, DLheaders).then(resp => {
           console.log('post dl')
           console.log(resp)
@@ -118,7 +122,9 @@ export default {
           console.log(dataBytes)
           const encryptPassBytes = new TextEncoder().encode(this.encryptPass)
           console.log('encrytion pass', encryptPassBytes)
-          decrypt(dataBytes, nonce, encryptPassBytes, decryptedBytesCallback, decryptionFailedCallback)
+          decrypt(dataBytes, nonce, encryptPassBytes,
+                  (bytes) => decryptedBytesCallback(bytes, confirmKey),
+                  decryptionFailedCallback)
         }).catch(logerr)
       }).catch(logerr)
     }
