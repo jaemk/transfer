@@ -99,22 +99,25 @@ pub struct NewInitUpload {
     pub size: i64,
     pub nonce: Vec<u8>,
     pub access_password: i32,
+    pub deletion_password: Option<i32>,
     pub download_limit: Option<i32>,
     pub expire_date: DateTime<Utc>,
 }
 impl NewInitUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<InitUpload> {
         let stmt = "insert into init_upload \
-                    (uuid_, file_name, content_hash, size_, nonce, access_password, download_limit, expire_date) \
-                    values ($1, $2, $3, $4, $5, $6, $7, $8) \
+                    (uuid_, file_name, content_hash, size_, nonce, access_password, deletion_password, download_limit, expire_date) \
+                    values ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
                     returning id, date_created";
         try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name, &self.content_hash, &self.size,
-                                        &self.nonce, &self.access_password, &self.download_limit, &self.expire_date]);
+                                        &self.nonce, &self.access_password, &self.deletion_password,
+                                        &self.download_limit, &self.expire_date]);
                             InitUpload;
                             id: 0, date_created: 1;
                             uuid: self.uuid, file_name: self.file_name, content_hash: self.content_hash,
                             size: self.size, nonce: self.nonce, access_password: self.access_password,
-                            download_limit: self.download_limit, expire_date: self.expire_date)
+                            deletion_password: self.deletion_password, download_limit: self.download_limit,
+                            expire_date: self.expire_date)
     }
 }
 
@@ -128,6 +131,7 @@ pub struct InitUpload {
     pub size: i64,
     pub nonce: Vec<u8>,
     pub access_password: i32,
+    pub deletion_password: Option<i32>,
     pub download_limit: Option<i32>,
     pub expire_date: DateTime<Utc>,
     pub date_created: DateTime<Utc>,
@@ -145,9 +149,10 @@ impl FromRow for InitUpload {
             size:               row.get(4),
             nonce:              row.get(5),
             access_password:    row.get(6),
-            download_limit:     row.get(7),
-            expire_date:        row.get(8),
-            date_created:       row.get(9),
+            deletion_password:  row.get(7),
+            download_limit:     row.get(8),
+            expire_date:        row.get(9),
+            date_created:       row.get(10),
         }
     }
 }
@@ -186,6 +191,7 @@ impl InitUpload {
             file_path: pb,
             nonce: self.nonce,
             access_password: self.access_password,
+            deletion_password: self.deletion_password,
             download_limit: self.download_limit,
             expire_date: self.expire_date,
         })
@@ -218,23 +224,24 @@ pub struct NewUpload {
     pub file_path: String,
     pub nonce: Vec<u8>,
     pub access_password: i32,
+    pub deletion_password: Option<i32>,
     pub download_limit: Option<i32>,
     pub expire_date: DateTime<Utc>,
 }
 impl NewUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<Upload> {
         let stmt = "insert into upload \
-                    (uuid_, content_hash, size_, file_name, file_path, nonce, access_password, download_limit, expire_date) \
-                    values ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+                    (uuid_, content_hash, size_, file_name, file_path, nonce, access_password, deletion_password, download_limit, expire_date) \
+                    values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
                     returning id, deleted, date_created";
         try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.size, &self.file_name,
-                                                &self.file_path, &self.nonce, &self.access_password,
+                                                &self.file_path, &self.nonce, &self.access_password, &self.deletion_password,
                                                 &self.download_limit, &self.expire_date]);
                             Upload;
                             id: 0, deleted: 1, date_created: 2;
                             uuid: self.uuid, content_hash: self.content_hash, size: self.size, file_name: self.file_name,
                             file_path: self.file_path, nonce: self.nonce, access_password: self.access_password,
-                            download_limit: self.download_limit, expire_date: self.expire_date)
+                            deletion_password: self.deletion_password, download_limit: self.download_limit, expire_date: self.expire_date)
     }
 }
 
@@ -249,6 +256,7 @@ pub struct Upload {
     pub file_path: String,
     pub nonce: Vec<u8>,
     pub access_password: i32,
+    pub deletion_password: Option<i32>,
     pub download_limit: Option<i32>,
     pub expire_date: DateTime<Utc>,
     pub deleted: bool,
@@ -268,10 +276,11 @@ impl FromRow for Upload {
             file_path:          row.get(5),
             nonce:              row.get(6),
             access_password:    row.get(7),
-            download_limit:     row.get(8),
-            expire_date:        row.get(9),
-            deleted:            row.get(10),
-            date_created:       row.get(11),
+            deletion_password:  row.get(8),
+            download_limit:     row.get(9),
+            expire_date:        row.get(10),
+            deleted:            row.get(11),
+            date_created:       row.get(12),
         }
     }
 }
@@ -289,6 +298,17 @@ impl Upload {
                     from upload \
                     where uuid_ = $1 and deleted = false";
         try_query_one!(conn.query(stmt, &[uuid]), Upload)
+    }
+
+    pub fn get_access_auth<T: GenericConnection>(&self, conn: &T) -> Result<Auth> {
+        Auth::find(conn, &self.access_password)
+    }
+
+    pub fn get_deletion_auth<T: GenericConnection>(&self, conn: &T) -> Result<Option<Auth>> {
+        Ok(match self.deletion_password {
+            Some(ref id) => Some(Auth::find(conn, id)?),
+            None => None,
+        })
     }
 
     /// Check if an `upload` record with the given `file_name` exists and is available for download

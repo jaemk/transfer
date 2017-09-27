@@ -61,6 +61,7 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
                     handlers::api_bye,
                     handlers::api_upload_init,
                     handlers::api_upload_file,
+                    handlers::api_upload_delete,
                     handlers::api_download_init,
                     handlers::api_download,
                     handlers::api_download_confirm,

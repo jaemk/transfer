@@ -56,6 +56,7 @@ struct UploadInitPost {
     size: u64,
     content_hash: String,
     access_password: String,
+    deletion_password: Option<String>,
     download_limit: Option<u32>,
     lifespan: Option<i64>,
 }
@@ -64,12 +65,17 @@ impl UploadInitPost {
         let lifespan = Duration::seconds(self.lifespan.unwrap_or(models::UPLOAD_LIFESPAN_SECS_DEFAULT));
         let expire_date = Utc::now().checked_add_signed(lifespan)
             .ok_or_else(|| format_err!(ErrorKind::BadRequest, "Lifespan (seconds) too large"))?;
+        let deletion_password = match self.deletion_password {
+            Some(ref hex) => Some(Vec::from_hex(hex)?),
+            None => None,
+        };
         Ok(UploadInit {
             nonce: Vec::from_hex(&self.nonce)?,
             file_name: self.file_name.to_owned(),
             size: self.size as i64,
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
+            deletion_password: deletion_password,
             download_limit: self.download_limit.map(|n| n as i32),
             expire_date: expire_date,
         })
@@ -77,12 +83,14 @@ impl UploadInitPost {
 }
 
 /// Upload post info converted/decoded
+#[derive(Debug)]
 struct UploadInit {
     nonce: Vec<u8>,
     file_name: String,
     size: i64,
     content_hash: Vec<u8>,
     access_password: Vec<u8>,
+    deletion_password: Option<Vec<u8>>,
     download_limit: Option<i32>,
     expire_date: DateTime<Utc>,
 }
@@ -112,6 +120,13 @@ fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<
             bail_fmt!(ErrorKind::OutOfSpace, "Server out of storage space");
         }
         let access_auth = models::NewAuth::from_bytes(&info.access_password)?.insert(&trans)?;
+        let deletion_auth = match info.deletion_password {
+            Some(ref bytes) => {
+                let auth = models::NewAuth::from_bytes(bytes)?.insert(&trans)?;
+                Some(auth.id)
+            }
+            None => None,
+        };
         let new_init_upload = models::NewInitUpload {
             uuid: uuid,
             file_name: info.file_name,
@@ -119,6 +134,7 @@ fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<
             size: info.size,
             nonce: info.nonce,
             access_password: access_auth.id,
+            deletion_password: deletion_auth,
             download_limit: info.download_limit,
             expire_date: info.expire_date,
         };
@@ -208,6 +224,58 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
 }
 
 
+#[derive(Deserialize)]
+struct DeleteKeyAccessPost {
+    key: String,
+    deletion_password: String,
+}
+impl DeleteKeyAccessPost {
+    fn decode_hex(&self) -> Result<DeleteKeyAccess> {
+        use std::str::FromStr;
+        Ok(DeleteKeyAccess {
+            uuid: Uuid::from_str(&self.key)?,
+            deletion_password: Vec::from_hex(&self.deletion_password)?,
+        })
+    }
+}
+
+struct DeleteKeyAccess {
+    uuid: Uuid,
+    deletion_password: Vec<u8>,
+}
+
+
+#[post("/api/upload/delete", data = "<delete_key>")]
+fn api_upload_delete(delete_key: Json<DeleteKeyAccessPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+    let delete_key = delete_key.decode_hex()
+        .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
+    {
+        let trans = conn.transaction()?;
+        let upload = models::Upload::find(&trans, &delete_key.uuid)?;
+        let deletion_auth = upload.get_deletion_auth(&trans)?;
+        match deletion_auth {
+            None => bail_fmt!(ErrorKind::BadRequest, "cannot delete"),
+            Some(auth) => {
+                auth.verify(&delete_key.deletion_password)?;
+                match fs::remove_file(&upload.file_path) {
+                    Ok(_) => (),
+                    Err(e) => error!("Error deleting {}, {}, continuing...", upload.file_path, e),
+                }
+                let id = upload.id;
+                match upload.delete(&trans) {
+                    Ok(_) => {
+                        models::Status::dec_upload(&trans, upload.size)?;
+                    }
+                    Err(e) => error!("Error deleting upload with id={}, {}, continuing...", id, e),
+                }
+            }
+        }
+        trans.commit()?;
+    }
+    Ok(Json(json!({"ok": "ok"})))
+}
+
+
 /// Download identifier and access/auth password
 #[derive(Deserialize)]
 struct DownloadKeyAccessPost {
@@ -243,7 +311,7 @@ fn api_download_init(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn
     let (upload, init_download_content, init_download_confirm) = {
         let trans = conn.transaction()?;
         let upload = models::Upload::find(&trans, &download_key.uuid)?;
-        let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
+        let access_auth = upload.get_access_auth(&trans)?;
         access_auth.verify(&download_key.access_password)?;
         let n_downloads = upload.download_count(&trans)? as i32;
         if let Some(limit) = upload.download_limit {
@@ -286,7 +354,7 @@ fn api_download(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> 
         let trans = conn.transaction()?;
         let init_download = models::InitDownload::find(&trans, &download_key.uuid, models::DownloadType::Content)?;
         let upload = init_download.get_upload(&trans)?;
-        let access_auth = models::Auth::find(&**conn, &upload.access_password)?;
+        let access_auth = upload.get_access_auth(&trans)?;
         access_auth.verify(&download_key.access_password)?;
         let n_downloads = upload.download_count(&trans)? as i32;
         if let Some(limit) = upload.download_limit {
