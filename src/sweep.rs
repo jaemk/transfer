@@ -19,21 +19,18 @@ const SWEEP_TIMEOUT_SECS: u64 = 60;
 
 /// Cleanup `init_upload` table, deleting expired items
 fn sweep_init_upload(conn: &postgres::Connection) -> Result<i64> {
-    info!("Sweeping `init_upload` table");
     models::InitUpload::clear_outdated(conn)
 }
 
 
 /// Cleanup `init_download` table, deleting expire items
 fn sweep_init_download(conn: &postgres::Connection) -> Result<i64> {
-    info!("Sweeping `init_download` table");
     models::InitDownload::clear_outdated(conn)
 }
 
 
 /// Cleanup `upload` table, deleting expired items
 fn sweep_upload(conn: &postgres::Connection) -> Result<i64> {
-    info!("Sweeping `upload` table and deleting associated files");
     let uploads = models::Upload::select_outdated(conn)?;
     let mut sum = 0;
     for upload in uploads.into_iter() {

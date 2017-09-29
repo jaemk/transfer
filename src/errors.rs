@@ -5,8 +5,10 @@ use std;
 use log;
 use uuid;
 use hex;
-use rocket;
+use serde;
+use serde_json;
 use postgres;
+use r2d2;
 use ring;
 use migrant_lib;
 
@@ -15,10 +17,11 @@ error_chain! {
     foreign_links {
         Io(std::io::Error);
         LogInit(log::SetLoggerError) #[doc = "Error initializing env_logger"];
+        ConnTimeout(r2d2::GetTimeout);
         ParseInt(std::num::ParseIntError);
+        Json(serde_json::Error);
         Uuid(uuid::ParseError);
         Hex(hex::FromHexError);
-        RocketConfig(rocket::config::ConfigError) #[doc = "Error finalizing rocket config"];
         Postgres(postgres::error::Error);
         RingUnspecified(ring::error::Unspecified);
         MigrantLib(migrant_lib::Error);
@@ -39,6 +42,10 @@ error_chain! {
         PathRepr(p: std::path::PathBuf) {
             description("Unable to convert Path to String")
             display("PathRepr Error: Unable to convert Path to String: {:?}", p)
+        }
+        QueryParamParse(e: serde::de::value::Error) {
+            description("Error parsing query params")
+            display("QueryParamParse Error: {}", e)
         }
         BadRequest(s: String) {
             description("Bad request")
@@ -76,55 +83,6 @@ impl Error {
         match *self.kind() {
             ErrorKind::DoesNotExist(_) => true,
             _ => false,
-        }
-    }
-}
-
-impl<'r> rocket::response::Responder<'r> for Error {
-    fn respond_to(self, _: &rocket::request::Request) -> rocket::response::Result<'r> {
-        use ErrorKind::*;
-        match *self.kind() {
-            BadRequest(ref s) => {
-                let body = json!({"error": s}).to_string();
-                rocket::Response::build()
-                    .status(rocket::http::Status::BadRequest)
-                    .header(rocket::http::ContentType::JSON)
-                    .sized_body(std::io::Cursor::new(body))
-                    .ok()
-            }
-            InvalidAuth(ref s) => {
-                let body = json!({"error": s}).to_string();
-                rocket::Response::build()
-                    .status(rocket::http::Status::Unauthorized)
-                    .header(rocket::http::ContentType::JSON)
-                    .sized_body(std::io::Cursor::new(body))
-                    .ok()
-            }
-            OutOfSpace(ref s) => {
-                let body = json!({"error": s}).to_string();
-                rocket::Response::build()
-                    .status(rocket::http::Status::ServiceUnavailable)
-                    .header(rocket::http::ContentType::JSON)
-                    .sized_body(std::io::Cursor::new(body))
-                    .ok()
-            }
-            UploadTooLarge(ref s) => {
-                let body = json!({"error": s}).to_string();
-                rocket::Response::build()
-                    .status(rocket::http::Status::PayloadTooLarge)
-                    .header(rocket::http::ContentType::JSON)
-                    .sized_body(std::io::Cursor::new(body))
-                    .ok()
-            }
-            DoesNotExist(ref s) => {
-                let body = json!({"error": s}).to_string();
-                rocket::Response::build()
-                    .status(rocket::http::Status::NotFound)
-                    .header(rocket::http::ContentType::JSON)
-                    .sized_body(std::io::Cursor::new(body))
-                    .ok()
-            }
-            _ => Err(rocket::http::Status::InternalServerError),
         }
     }
 }

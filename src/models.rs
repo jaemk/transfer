@@ -318,7 +318,7 @@ impl Upload {
     }
 
     /// Return a collection of `Upload` instances that are older than `UPLOAD_MAX_LIFE_SECS`
-    /// TODO: Also return uploads that are over their download limit
+    /// or are over their download limit
     pub fn select_outdated<T: GenericConnection>(conn: &T) -> Result<Vec<Self>> {
         let stmt = "select * \
                     from upload \

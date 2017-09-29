@@ -3,11 +3,11 @@ Service initialization
 */
 use std::env;
 use std::thread;
+use std::io;
 
 use env_logger;
 use chrono::Local;
-use rocket;
-use rocket::config::{Config, LoggingLevel};
+use rouille;
 
 use handlers;
 use sweep;
@@ -16,6 +16,7 @@ use models;
 use errors::*;
 
 
+/// Initialize the `status` database table if it doesn't already exist
 fn init_status() -> Result<()> {
     let conn = db::init_conn()?;
     models::Status::init_load(&conn)?;
@@ -23,7 +24,14 @@ fn init_status() -> Result<()> {
 }
 
 
-pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
+/// Initialize things
+/// - env logger
+/// - database `status` table
+/// - database connection pool
+/// - cleaning thread
+/// - server
+/// - handle errors
+pub fn start(host: &str, port: u16) -> Result<()> {
     // Set a custom logging format & change the env-var to "LOG"
     // e.g. LOG=info chatbot serve
     env_logger::LogBuilder::new()
@@ -44,30 +52,93 @@ pub fn start(host: &str, port: u16, workers: u16, log: bool) -> Result<()> {
     // spawn our cleaning thread
     let _ = thread::spawn(sweep::db_sweeper);
 
-    info!("** Listening on {} **", host);
-    let mut config = Config::production()?;
-    config.set_address(host)?;
-    config.set_port(port);
-    if workers > 0 { config.set_workers(workers); }
-    if log { config.set_log_level(LoggingLevel::Normal); }
+    let db_pool = db::init_pool();
 
-    rocket::custom(config, log)
-        .manage(db::init_pool())
-        .mount("/static/",  routes![handlers::static_files])
-        .mount("/",
-                routes![
-                    handlers::index,
-                    handlers::api_hello,
-                    handlers::api_bye,
-                    handlers::api_upload_init,
-                    handlers::api_upload_file,
-                    handlers::api_upload_delete,
-                    handlers::api_download_init,
-                    handlers::api_download,
-                    handlers::api_download_confirm,
-                ]
-            )
-        .launch();
-    Ok(())
+    let addr = format!("{}:{}", host, port);
+    info!("** Listening on {} **", addr);
+
+    rouille::start_server(&addr, move |request| {
+        let db_pool = db_pool.clone();
+
+        rouille::log(request, io::stdout(), move || {
+            { // static files
+                let static_resp = rouille::match_assets(&request, "static");
+                if static_resp.is_success() {
+                    return static_resp;
+                }
+            }
+            // dispatch and handle errors
+            match route_request(request, db_pool) {
+                Ok(resp) => resp,
+                Err(e) => {
+                    use ErrorKind::*;
+                    error!("Handler Error: {}", e);
+                    match *e {
+                        BadRequest(ref s) => {
+                            // bad request
+                            let body = json!({"error": s});
+                            json_resp_unwrap!(body).with_status_code(400)
+                        }
+                        InvalidAuth(ref s) => {
+                            // unauthorized
+                            let body = json!({"error": s});
+                            json_resp_unwrap!(body).with_status_code(401)
+                        }
+                        DoesNotExist(ref s) => {
+                            // not found
+                            let body = json!({"error": s});
+                            json_resp_unwrap!(body).with_status_code(404)
+                        }
+                        UploadTooLarge(ref s) => {
+                            // payload too large / request entity to large
+                            let body = json!({"error": s});
+                            json_resp_unwrap!(body).with_status_code(413)
+                        }
+                        OutOfSpace(ref s) => {
+                            // service unavailable
+                            let body = json!({"error": s});
+                            json_resp_unwrap!(body).with_status_code(503)
+                        }
+                        _ => rouille::Response::text("Something went wrong").with_status_code(500),
+                    }
+                }
+            }
+        })
+    });
+}
+
+
+/// Route the request to appropriate handler
+fn route_request(request: &rouille::Request, db_pool: db::Pool) -> Result<rouille::Response> {
+    Ok(router!(request,
+        (GET) (/) => {
+            rouille::Response::html("<html><body> <p> hello </p> <script src=\"/assets/js/app.js\"></script></body></html>")
+        },
+        (GET) (/api/hello) => {
+            json_resp!(&json!({"message": "hey!"}))
+        },
+        (POST) (/api/bye) => {
+            json_resp!(&json!({"message": "bye!"}))
+        },
+        (POST) (/api/upload/init) => {
+            handlers::api_upload_init(request, db_pool.get()?)?
+        },
+        (POST) (/api/upload) => {
+            handlers::api_upload_file(request, db_pool.get()?)?
+        },
+        (POST) (/api/upload/delete) => {
+            handlers::api_upload_delete(request, db_pool.get()?)?
+        },
+        (POST) (/api/download/init) => {
+            handlers::api_download_init(request, db_pool.get()?)?
+        },
+        (POST) (/api/download) => {
+            handlers::api_download(request, db_pool.get()?)?
+        },
+        (POST) (/api/download/confirm) => {
+            handlers::api_download_confirm(request, db_pool.get()?)?
+        },
+        _ => bail_fmt!(ErrorKind::DoesNotExist, "nothing here")
+    ))
 }
 

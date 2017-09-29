@@ -1,10 +1,5 @@
-#![feature(plugin, custom_derive)]
-#![plugin(rocket_codegen)]
 #![recursion_limit = "1024"]
 
-extern crate rocket;
-#[macro_use] extern crate rocket_contrib;
-#[macro_use] extern crate serde_derive;
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate clap;
 #[macro_use] extern crate log;
@@ -12,12 +7,17 @@ extern crate env_logger;
 extern crate chrono;
 extern crate hex;
 extern crate uuid;
+extern crate ring;
+extern crate crypto;
 extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate postgres;
 extern crate migrant_lib;
-extern crate ring;
-extern crate crypto;
+extern crate serde;
+#[macro_use] extern crate serde_derive;
+#[macro_use] extern crate serde_json;
+extern crate serde_urlencoded;
+#[macro_use] extern crate rouille;
 
 #[macro_use] pub mod macros;
 pub mod service;
@@ -52,17 +52,9 @@ fn run() -> Result<()> {
             .arg(Arg::with_name("public")
                 .long("public")
                 .help("Serve on '0.0.0.0' instead of 'localhost'"))
-            .arg(Arg::with_name("log")
-                .long("log")
-                .help("Output logging info. Shortcut for setting env-var LOG=info"))
             .arg(Arg::with_name("debug")
                 .long("debug")
-                .help("Output debug logging info. Shortcut for setting env-var LOG=debug"))
-            .arg(Arg::with_name("workers")
-                .long("workers")
-                .short("w")
-                .takes_value(true)
-                .help("Number of workers to use")))
+                .help("Output debug logging info. Shortcut for setting env-var LOG=debug")))
         .subcommand(SubCommand::with_name("admin")
             .about("admin functions")
             .subcommand(SubCommand::with_name("database")
@@ -77,26 +69,24 @@ fn run() -> Result<()> {
                 .about("Sweep up orphaned files that are no longer referenced in the database")))
         .get_matches();
 
-    if let Some(admin_matches) = matches.subcommand_matches("admin") {
-        admin::handle(&admin_matches)?;
-        return Ok(())
+    match matches.subcommand() {
+        ("admin", Some(admin_matches)) => {
+            admin::handle(&admin_matches)?;
+        }
+        ("serve", Some(serve_matches)) => {
+            env::set_var("LOG", "info");
+            let log_debug = serve_matches.is_present("debug");
+            if log_debug { env::set_var("LOG", "debug"); }
+            let port = serve_matches.value_of("port").unwrap_or("3000").parse::<u16>().chain_err(|| "`--port` expects an integer")?;
+            let host = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
+            service::start(&host, port)?;
+        }
+        _ => {
+            eprintln!("{}: see `--help`", APPNAME);
+        }
     }
-
-    if let Some(serve_matches) = matches.subcommand_matches("serve") {
-        let log_info = serve_matches.is_present("log");
-        let log_debug = serve_matches.is_present("debug");
-        if log_info { env::set_var("LOG", "info"); }
-        if log_debug { env::set_var("LOG", "debug"); }
-        let log = if log_info || log_debug { true } else { false };
-        let port = serve_matches.value_of("port").unwrap_or("3000").parse::<u16>().chain_err(|| "`--port` expects an integer")?;
-        let host = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
-        let workers = serve_matches.value_of("workers").unwrap_or("0").parse::<u16>().chain_err(|| "`--workers` expects an integer")?;
-        service::start(&host, port, workers, log)?;
-        return Ok(());
-    }
-
-    eprintln!("{}: see `--help`", APPNAME);
     Ok(())
 }
 
 quick_main!(run);
+

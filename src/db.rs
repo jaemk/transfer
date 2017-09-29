@@ -2,10 +2,6 @@
 Database connection stuff
 */
 use std::env;
-use std::ops::Deref;
-use rocket::http::Status;
-use rocket::request::{self, FromRequest};
-use rocket::{Request, State, Outcome};
 use r2d2;
 use r2d2_postgres::{TlsMode, PostgresConnectionManager};
 use postgres;
@@ -19,26 +15,7 @@ pub type Pool = r2d2::Pool<PostgresConnectionManager>;
 
 
 /// Postgres r2d2 pooled connection (wrapped for `rocket`)
-pub struct DbConn(pub r2d2::PooledConnection<PostgresConnectionManager>);
-
-
-impl<'a, 'r> FromRequest<'a, 'r> for DbConn {
-    type Error = ();
-    fn from_request(request: &'a Request<'r>) -> request::Outcome<DbConn, ()> {
-        let pool = request.guard::<State<Pool>>()?;
-        match pool.get() {
-            Ok(conn) => Outcome::Success(DbConn(conn)),
-            Err(_) => Outcome::Failure((Status::ServiceUnavailable, ())),
-        }
-    }
-}
-
-impl Deref for DbConn {
-    type Target = r2d2::PooledConnection<PostgresConnectionManager>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
+pub type DbConn = r2d2::PooledConnection<PostgresConnectionManager>;
 
 
 /// Try to get the current db connection string
@@ -61,6 +38,7 @@ pub fn init_pool() -> Pool {
 }
 
 
+/// Initialize a single `postgres::Connection`
 pub fn init_conn() -> Result<postgres::Connection> {
     let conn_str = connect_str()?;
     Ok(postgres::Connection::connect(conn_str, postgres::TlsMode::None)?)

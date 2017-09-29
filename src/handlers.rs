@@ -1,14 +1,11 @@
 /*!
 Route handlers
 */
-use std::path;
-use std::io;
+use std::io::{self, Read, BufRead, Write};
+use std::str::FromStr;
 use std::fs;
 
-use rocket;
-use rocket::response;
-use rocket::http;
-use rocket_contrib::{Json, Value as JsonValue};
+use rouille;
 use hex::{FromHex, ToHex};
 use uuid::Uuid;
 use chrono::{Utc, Duration, DateTime};
@@ -17,35 +14,6 @@ use db;
 use auth;
 use models;
 use errors::*;
-
-
-/// Static file handler
-#[get("/<file..>")]
-fn static_files(file: path::PathBuf) -> Option<response::NamedFile> {
-    response::NamedFile::open(path::Path::new("static/").join(file)).ok()
-}
-
-
-/// Index page with static files test
-#[get("/")]
-fn index<'a>() -> response::Response<'a> {
-    let resp = response::Response::build()
-        .header(http::ContentType::HTML)
-        .sized_body(io::Cursor::new("<html><body> <p> hello </p> <script src=\"/static/js/app.js\"></script></body></html>"))
-        .finalize();
-    resp
-}
-
-
-#[get("/api/hello")]
-fn api_hello() -> Json<JsonValue> {
-    Json(json!({"message": "hello!"}))
-}
-
-#[post("/api/bye")]
-fn api_bye<'a>() -> Json<JsonValue> {
-    Json(json!({"message": "bye!"}))
-}
 
 
 /// Upload Initialize post info (in transport formatting)
@@ -96,19 +64,18 @@ struct UploadInit {
 }
 
 
+
 /// Initialize a new upload
 ///
-/// Supply all meta-data about an upload. Returning a unique key and a response-url
-/// fragment where the actual content should be posted
+/// Supply all meta-data about an upload. Returning a unique key
 /// e.g.)
-///   format!("{}{}?key={}", "http://localhost:3000", "/api/upload", "...long-key...")
+///   format!("{}/api/upload?key={}", "http://localhost:3000", "...long-key...")
 ///
-#[post("/api/upload/init", data = "<info>")]
-fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+pub fn api_upload_init(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+    let info = load_json!(request, UploadInitPost);
     let info = info.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     if info.size > models::UPLOAD_LIMIT_BYTES {
-        error!("Upload too large");
         bail_fmt!(ErrorKind::UploadTooLarge, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
     }
     let uuid = Uuid::new_v4();
@@ -142,15 +109,13 @@ fn api_upload_init(info: Json<UploadInitPost>, conn: db::DbConn) -> Result<Json<
         trans.commit()?;
     }
 
-    let resp = json!({
-        "key": &uuid_hex,
-    });
-    Ok(Json(resp))
+    let resp = json_resp!(json!({"key": &uuid_hex}));
+    Ok(resp)
 }
 
 
 /// Upload identifier
-#[derive(FromForm)]
+#[derive(Deserialize, Debug)]
 struct UploadKey{
     key: String,
 }
@@ -158,11 +123,12 @@ struct UploadKey{
 
 /// Upload encrypted bytes to a specified upload-key
 ///
-/// TODO: Add another upload size check
-#[post("/api/upload?<upload_key>", format = "application/octet-stream", data = "<data>")]
-fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) -> Result<Json<JsonValue>> {
-    use std::str::FromStr;
-    use std::io::{Write, BufRead};
+/// Before accepting upload:
+///     - Make sure the server has enough space available (using the previously reported file size).
+///     - Make sure the upload came within the upload time-out
+///     - While reading the uploaded bytes, keep count and make sure the number of bytes <= state size
+pub fn api_upload_file(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+    let upload_key = load_params!(request, UploadKey);
     let upload = {
         let now = Utc::now();
         let uuid = Uuid::from_str(&upload_key.key)?;
@@ -176,7 +142,6 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
         let file_path = models::Upload::new_file_path(&init_upload.uuid)?;
         init_upload.delete(&trans)?;
         if ! init_upload.still_valid(&now) {
-            error!("Upload request came too late");
             bail_fmt!(ErrorKind::BadRequest, "Upload request came to late");
         }
         let new_upload = init_upload.into_upload(&file_path)?;
@@ -188,7 +153,7 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
     // In case they lied about the upload size...
     let mut byte_count = 0;
     let mut file = fs::File::create(&upload.file_path)?;
-    let mut stream = io::BufReader::new(data.open());
+    let mut stream = io::BufReader::new(request.data().expect("body already read"));
     let stated_upload_size = upload.size;
     loop {
         let n = {
@@ -214,13 +179,13 @@ fn api_upload_file(upload_key: UploadKey, data: rocket::Data, conn: db::DbConn) 
                 if n == 0 { break; }
             }
             // delete the entry we just made
-            upload.delete(&**conn)?;
+            upload.delete(&*conn)?;
             bail_fmt!(ErrorKind::UploadTooLarge, "Upload larger than previously stated: {}", stated_upload_size)
         }
     }
 
-    let resp = json!({"ok": "ok"});
-    Ok(Json(resp))
+    let resp = json_resp!(json!({"ok": "ok"}));
+    Ok(resp)
 }
 
 
@@ -231,7 +196,6 @@ struct DeleteKeyAccessPost {
 }
 impl DeleteKeyAccessPost {
     fn decode_hex(&self) -> Result<DeleteKeyAccess> {
-        use std::str::FromStr;
         Ok(DeleteKeyAccess {
             uuid: Uuid::from_str(&self.key)?,
             deletion_password: Vec::from_hex(&self.deletion_password)?,
@@ -245,8 +209,10 @@ struct DeleteKeyAccess {
 }
 
 
-#[post("/api/upload/delete", data = "<delete_key>")]
-fn api_upload_delete(delete_key: Json<DeleteKeyAccessPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+/// Deletes an upload by key. Only uploads that were created with a deletion password can be deleted.
+/// Deletion password must be present.
+pub fn api_upload_delete(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+    let delete_key = load_json!(request, DeleteKeyAccessPost);
     let delete_key = delete_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     {
@@ -272,7 +238,7 @@ fn api_upload_delete(delete_key: Json<DeleteKeyAccessPost>, conn: db::DbConn) ->
         }
         trans.commit()?;
     }
-    Ok(Json(json!({"ok": "ok"})))
+    Ok(json_resp!(json!({"ok": "ok"})))
 }
 
 
@@ -284,7 +250,6 @@ struct DownloadKeyAccessPost {
 }
 impl DownloadKeyAccessPost {
     fn decode_hex(&self) -> Result<DownloadKeyAccess> {
-        use std::str::FromStr;
         Ok(DownloadKeyAccess{
             uuid: Uuid::from_str(&self.key)?,
             access_password: Vec::from_hex(&self.access_password)?,
@@ -302,9 +267,9 @@ struct DownloadKeyAccess {
 ///
 /// Using a key and access-password, obtain the download meta-data (stuff
 /// needed for decryption).
-#[post("/api/download/init", data = "<download_key>")]
-fn api_download_init(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+pub fn api_download_init(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
     let now = Utc::now();
+    let download_key = load_json!(request, DownloadKeyAccessPost);
     let download_key = download_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
 
@@ -335,7 +300,7 @@ fn api_download_init(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn
         trans.commit()?;
         (upload, init_download_content, init_download_confirm)
     };
-    Ok(Json(json!({
+    Ok(json_resp!(json!({
         "nonce": upload.nonce.to_hex(),
         "size": upload.size,
         "download_key": init_download_content.uuid.as_bytes().to_hex(),
@@ -345,9 +310,9 @@ fn api_download_init(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn
 
 
 /// Download encrypted bytes
-#[post("/api/download", data = "<download_key>")]
-fn api_download(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> Result<response::Stream<fs::File>> {
+pub fn api_download(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
     let now = Utc::now();
+    let download_key = load_json!(request, DownloadKeyAccessPost);
     let download_key = download_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     let upload = {
@@ -372,7 +337,7 @@ fn api_download(download_key: Json<DownloadKeyAccessPost>, conn: db::DbConn) -> 
         upload
     };
     let file = fs::File::open(upload.file_path)?;
-    Ok(response::Stream::from(file))
+    Ok(rouille::Response::from_file("application/octet-stream", file))
 }
 
 
@@ -387,20 +352,20 @@ struct DownloadKeyHash {
 /// Obtain the decrypted file's name
 ///
 /// Upload identifier and a matching hash of the decrypted content are required
-#[post("/api/download/confirm", data = "<download_key>")]
-fn api_download_confirm(download_key: Json<DownloadKeyHash>, conn: db::DbConn) -> Result<Json<JsonValue>> {
+pub fn api_download_confirm(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+    let download_key = load_json!(request, DownloadKeyHash);
     let uuid_bytes = Vec::from_hex(&download_key.key)?;
     let hash_bytes = Vec::from_hex(&download_key.hash)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
     let upload = {
         let trans = conn.transaction()?;
-        let init_download = models::InitDownload::find(&**conn, &uuid, models::DownloadType::Confirm)?;
+        let init_download = models::InitDownload::find(&*conn, &uuid, models::DownloadType::Confirm)?;
         let upload = init_download.get_upload(&trans)?;
         auth::eq(&hash_bytes, &upload.content_hash)?;
         init_download.delete(&trans)?;
         trans.commit()?;
         upload
     };
-    Ok(Json(json!({"file_name": &upload.file_name})))
+    Ok(json_resp!(json!({"file_name": &upload.file_name})))
 }
 
