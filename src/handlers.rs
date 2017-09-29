@@ -86,10 +86,10 @@ pub fn api_upload_init(request: &rouille::Request, conn: db::DbConn) -> Result<r
         if ! models::Status::can_fit(&trans, info.size)? {
             bail_fmt!(ErrorKind::OutOfSpace, "Server out of storage space");
         }
-        let access_auth = models::NewAuth::from_bytes(&info.access_password)?.insert(&trans)?;
+        let access_auth = models::NewAuth::from_pass_bytes(&info.access_password)?.insert(&trans)?;
         let deletion_auth = match info.deletion_password {
             Some(ref bytes) => {
-                let auth = models::NewAuth::from_bytes(bytes)?.insert(&trans)?;
+                let auth = models::NewAuth::from_pass_bytes(bytes)?.insert(&trans)?;
                 Some(auth.id)
             }
             None => None,

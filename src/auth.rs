@@ -4,7 +4,7 @@ Authorization/crypto things
 */
 use errors::*;
 use ring::rand::{self, SecureRandom};
-use ring::constant_time;
+use ring::{digest, constant_time};
 use crypto::bcrypt;
 
 
@@ -15,6 +15,14 @@ pub fn new_salt() -> Result<Vec<u8>> {
     let rng = rand::SystemRandom::new();
     rng.fill(&mut salt)?;
     Ok(salt)
+}
+
+
+/// Return the SHA256 hash of `bytes`
+pub fn sha256(bytes: &[u8]) -> Vec<u8> {
+    let alg = &digest::SHA256;
+    let digest = digest::digest(alg, bytes);
+    Vec::from(digest.as_ref())
 }
 
 

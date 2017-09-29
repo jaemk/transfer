@@ -48,9 +48,10 @@ pub struct NewAuth {
     pub hash: Vec<u8>,
 }
 impl NewAuth {
-    pub fn from_bytes(pass: &[u8]) -> Result<Self> {
+    pub fn from_pass_bytes(pass: &[u8]) -> Result<Self> {
         let salt = auth::new_salt()?;
-        let hash = auth::bcrypt_hash(pass, &salt)?;
+        let sha = auth::sha256(pass);
+        let hash = auth::bcrypt_hash(&sha, &salt)?;
         Ok(Self {
             salt, hash
         })
@@ -97,8 +98,9 @@ impl Auth {
 
     /// Try verifying the current `auth` record against a set of bytes, returning
     /// `Ok` if verification passes or `ErrorKind::InvalidAuth`
-    pub fn verify(&self, other_bytes: &[u8]) -> Result<()> {
-        let other_hash = auth::bcrypt_hash(other_bytes, &self.salt)?;
+    pub fn verify(&self, other_pass_bytes: &[u8]) -> Result<()> {
+        let other_sha = auth::sha256(other_pass_bytes);
+        let other_hash = auth::bcrypt_hash(&other_sha, &self.salt)?;
         auth::eq(&self.hash, &other_hash)
             .map_err(|_| format_err!(ErrorKind::InvalidAuth, "Invalid authentication"))?;
         Ok(())
