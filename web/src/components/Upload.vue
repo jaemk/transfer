@@ -31,6 +31,14 @@
             <Password confirm=true :updateFunc="(val) => updateField('encryptPass', val)" />
           </div>
         </div>
+        <div class="row-">
+          <div class="cell- left">
+            Deletion Password:
+          </div>
+          <div class="cell- left">
+            <Password confirm=true :updateFunc="(val) => updateField('deletePass', val)" />
+          </div>
+        </div>
         <div cell="row-">
           <button id="submit-form" type="submit" for="upload-form">Upload</button>
         </div>
@@ -55,6 +63,7 @@ export default {
     return {
       accessPass: '',
       encryptPass: '',
+      deletePass: '',
       iv: '',
       uploaded: false,
       downloadUrl: ''
@@ -79,11 +88,16 @@ export default {
         console.log('encrypt pass required')
         return
       }
-      let nonce = randomBytes(12)
-      let encryptPassBytes = new TextEncoder().encode(this.encryptPass)
-      let accessPassBytes = new TextEncoder().encode(this.accessPass)
-      let nonceHex = Buffer.from(nonce).toString('hex')
-      let accessPassHex = Buffer.from(accessPassBytes).toString('hex')
+      const nonce = randomBytes(12)
+      const encryptPassBytes = new TextEncoder().encode(this.encryptPass)
+      const accessPassBytes = new TextEncoder().encode(this.accessPass)
+      const nonceHex = Buffer.from(nonce).toString('hex')
+      const accessPassHex = Buffer.from(accessPassBytes).toString('hex')
+      let deletePassHex = null
+      if (this.deletePass.length > 0) {
+        const deletePassBytes = new TextEncoder().encode(this.deletePass)
+        deletePassHex = Buffer.from(deletePassBytes).toString('hex')
+      }
 
       const encryptUploadData = (data, params, headers) => {
         const encryptedBytesCallback = (bytes) => {
@@ -114,7 +128,13 @@ export default {
         window.crypto.subtle.digest('SHA-256', data).then(contentHash => {
           const contentHashHex = Buffer.from(contentHash).toString('Hex')
           console.log('content hash', contentHashHex)
-          const params = {file_name: file.name, content_hash: contentHashHex, nonce: nonceHex, access_password: accessPassHex}
+          const params = {
+            file_name: file.name,
+            content_hash: contentHashHex,
+            nonce: nonceHex,
+            access_password: accessPassHex,
+            deletion_password: deletePassHex
+          }
           const headers = {headers: {'content-type': 'application/json'}}
           encryptUploadData(data, params, headers)
         }).catch(logerr)
