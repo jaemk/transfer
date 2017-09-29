@@ -30,7 +30,7 @@ struct UploadInitPost {
 }
 impl UploadInitPost {
     fn decode_hex(&self) -> Result<UploadInit> {
-        let lifespan = Duration::seconds(self.lifespan.unwrap_or(models::UPLOAD_LIFESPAN_SECS_DEFAULT));
+        let lifespan = Duration::seconds(self.lifespan.unwrap_or(models::CONFIG.upload_lifespan_secs_default));
         let expire_date = Utc::now().checked_add_signed(lifespan)
             .ok_or_else(|| format_err!(ErrorKind::BadRequest, "Lifespan (seconds) too large"))?;
         let deletion_password = match self.deletion_password {
@@ -75,8 +75,8 @@ pub fn api_upload_init(request: &rouille::Request, conn: db::DbConn) -> Result<r
     let info = load_json!(request, UploadInitPost);
     let info = info.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
-    if info.size > models::UPLOAD_LIMIT_BYTES {
-        bail_fmt!(ErrorKind::UploadTooLarge, "Upload too large, max bytes: {}", models::UPLOAD_LIMIT_BYTES)
+    if info.size > models::CONFIG.upload_limit_bytes {
+        bail_fmt!(ErrorKind::UploadTooLarge, "Upload too large, max bytes: {}", models::CONFIG.upload_limit_bytes)
     }
     let uuid = Uuid::new_v4();
     let uuid_hex = uuid.as_bytes().to_hex();

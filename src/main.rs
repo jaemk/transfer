@@ -2,6 +2,7 @@
 
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate clap;
+#[macro_use] extern crate lazy_static;
 #[macro_use] extern crate log;
 extern crate env_logger;
 extern crate chrono;
@@ -13,6 +14,7 @@ extern crate r2d2;
 extern crate r2d2_postgres;
 extern crate postgres;
 extern crate migrant_lib;
+extern crate ron;
 extern crate serde;
 #[macro_use] extern crate serde_derive;
 #[macro_use] extern crate serde_json;

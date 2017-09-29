@@ -4,19 +4,34 @@ Database models
 */
 use std::env;
 use std::path::{Path, PathBuf};
+use std::fs;
 use postgres::{self, GenericConnection};
 use chrono::{DateTime, Utc, Duration};
 use uuid::Uuid;
+use ron;
 
 use auth;
 use errors::*;
 
 
-pub const UPLOAD_LIMIT_BYTES: i64 = 200_000_000;  // 200mb
-pub const UPLOAD_TIMEOUT_SECS: i64 = 30;
-pub const UPLOAD_LIFESPAN_SECS_DEFAULT: i64 = 60 * 60 * 24;  // 1 day
-pub const MAX_COMBINED_UPLOAD_BYTES: i64 = 5_000_000_000;  // 5gb
-pub const DOWNLOAD_TIMEOUT_SECS: i64 = 120;
+lazy_static! {
+    pub static ref CONFIG: Config = {
+        let f = fs::File::open("config.ron").expect("Failed opening config file");
+        let config = ron::de::from_reader(f).expect("Failed parsing config file");
+        info!("** Config file `config.ron` loaded **");
+        config
+    };
+}
+
+
+#[derive(Debug, Deserialize)]
+pub struct Config {
+    pub upload_limit_bytes: i64,
+    pub upload_timeout_secs: i64,
+    pub upload_lifespan_secs_default: i64,
+    pub max_combined_upload_bytes: i64,
+    pub download_timeout_secs: i64,
+}
 
 
 pub trait FromRow {
@@ -198,18 +213,18 @@ impl InitUpload {
     }
 
     pub fn still_valid(&self, dt: &DateTime<Utc>) -> bool {
-        dt.signed_duration_since(self.date_created) <= Duration::seconds(UPLOAD_TIMEOUT_SECS)
+        dt.signed_duration_since(self.date_created) <= Duration::seconds(CONFIG.upload_timeout_secs)
     }
 
-    /// Try deleting all `init_upload` records that are older than the current `UPLOAD_TIMEOUT_SECS`
+    /// Try deleting all `init_upload` records that are older than the current `CONFIG.upload_timeout_secs`
     pub fn clear_outdated<T: GenericConnection>(conn: &T) -> Result<i64> {
         let stmt = "with deleted as (delete from init_upload where date_created < $1 returning 1) \
                     select count(*) from deleted";
-        let timeout = Duration::seconds(UPLOAD_TIMEOUT_SECS);
+        let timeout = Duration::seconds(CONFIG.upload_timeout_secs);
         let now = Utc::now();
         let cutoff = now.checked_sub_signed(timeout)
             .ok_or_else(|| format_err!(ErrorKind::InvalidDateTimeMathOffset, "Error subtracting {} secs from {:?}",
-                                       UPLOAD_TIMEOUT_SECS, now))?;
+                                       CONFIG.upload_timeout_secs, now))?;
         try_query_aggregate!(conn.query(stmt, &[&cutoff]), i64)
     }
 }
@@ -433,18 +448,18 @@ impl InitDownload {
 
     /// Check if download initializer is still valid
     pub fn still_valid(&self, dt: &DateTime<Utc>) -> bool {
-        dt.signed_duration_since(self.date_created) <= Duration::seconds(DOWNLOAD_TIMEOUT_SECS)
+        dt.signed_duration_since(self.date_created) <= Duration::seconds(CONFIG.download_timeout_secs)
     }
 
-    /// Try deleting all `init_download` records that are older than the current `DOWNLOAD_TIMEOUT_SECS`
+    /// Try deleting all `init_download` records that are older than the current `CONFIG.download_timeout_secs`
     pub fn clear_outdated<T: GenericConnection>(conn: &T) -> Result<i64> {
         let stmt = "with deleted as (delete from init_download where date_created < $1 returning 1) \
                     select count(*) from deleted";
-        let timeout = Duration::seconds(DOWNLOAD_TIMEOUT_SECS);
+        let timeout = Duration::seconds(CONFIG.download_timeout_secs);
         let now = Utc::now();
         let cutoff = now.checked_sub_signed(timeout)
             .ok_or_else(|| format_err!(ErrorKind::InvalidDateTimeMathOffset, "Error subtracting {} secs from {:?}",
-                                       DOWNLOAD_TIMEOUT_SECS, now))?;
+                                       CONFIG.download_timeout_secs, now))?;
         try_query_aggregate!(conn.query(stmt, &[&cutoff]), i64)
     }
 }
@@ -536,10 +551,10 @@ impl Status {
                             upload_count: 0, total_bytes: 0, date_modified: now)
     }
 
-    /// Check if we can hold `n` more bytes, staying under `MAX_COMBINED_UPLOAD_BYTES`
+    /// Check if we can hold `n` more bytes, staying under `CONFIG.max_combined_upload_bytes`
     pub fn can_fit<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<bool> {
         let status = Self::load(conn)?;
-        Ok((status.total_bytes + n_bytes) < MAX_COMBINED_UPLOAD_BYTES)
+        Ok((status.total_bytes + n_bytes) < CONFIG.max_combined_upload_bytes)
     }
 
     /// Increment `status` record count and running total of uploaded bytes

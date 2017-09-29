@@ -46,6 +46,9 @@ pub fn start(host: &str, port: u16) -> Result<()> {
         .parse(&env::var("LOG").unwrap_or_default())
         .init()?;
 
+    // force a config load
+    let _ = models::CONFIG;
+
     // make sure `status` record is initialized
     init_status()?;
 

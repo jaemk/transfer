@@ -12,6 +12,7 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
     - `migrant init`
     - `migrant apply --all`
     - `cargo run -- serve`
+    - configuration can be tweaked in `config.ron`
 - Webapp (`/web`):
     - `npm run dev`
     - open `http://localhost:8080`
