@@ -5,7 +5,6 @@ use std;
 use log;
 use uuid;
 use hex;
-use serde;
 use serde_json;
 use postgres;
 use r2d2;
@@ -42,10 +41,6 @@ error_chain! {
         PathRepr(p: std::path::PathBuf) {
             description("Unable to convert Path to String")
             display("PathRepr Error: Unable to convert Path to String: {:?}", p)
-        }
-        QueryParamParse(e: serde::de::value::Error) {
-            description("Error parsing query params")
-            display("QueryParamParse Error: {}", e)
         }
         BadRequest(s: String) {
             description("Bad request")

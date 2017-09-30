@@ -2,56 +2,9 @@
 Macros
 
 For working with
-    - `rouille`
     - `error_chain`
     - `postgres`
 */
-
-
-// -------------
-// rouille
-// -------------
-
-/// Parse request body into a type that implements `Deserialize`
-macro_rules! load_json {
-    ($request:expr, $model:ty) => {
-        {
-            let mut body = $request.data().expect("Can't read request body twice");
-            let mut s = String::new();
-            body.read_to_string(&mut s)?;
-            ::serde_json::from_str::<$model>(&s)?
-        }
-    }
-}
-
-
-/// Parse request query parameters into a type that implements `Deserialize`
-macro_rules! load_params {
-    ($request:expr, $model:ty) => {
-        {
-            let s = $request.raw_query_string();
-            info!("query_string: {:?}", s);
-            ::serde_urlencoded::from_str::<$model>(s).map_err(|e| ErrorKind::QueryParamParse(e))?
-        }
-    }
-}
-
-
-/// Construct a json `rouille::Response` from something that implements `Serialize`
-macro_rules! json_resp {
-    ($resp:expr) => {
-        rouille::Response::from_data("application/json", ::serde_json::to_string(&$resp)?.as_bytes())
-    }
-}
-
-
-/// Construct a json `rouille::Response` from something that implements `Serialize`,
-/// but panic on any serialization error
-macro_rules! json_resp_unwrap {
-    ($resp:expr) => {
-        rouille::Response::from_data("application/json", ::serde_json::to_string(&$resp).expect("Failed serializing json").as_bytes())
-    }
-}
 
 
 // -------------

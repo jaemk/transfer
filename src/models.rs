@@ -339,7 +339,7 @@ impl Upload {
     pub fn select_outdated<T: GenericConnection>(conn: &T) -> Result<Vec<Self>> {
         let stmt = "select * \
                     from upload \
-                    where expire_date <= $1 \
+                    where (expire_date <= $1 and deleted = false) \
                     or id in \
                         (with dl_counts as \
                             (select upload, min(download_limit) as download_limit, count(*) \

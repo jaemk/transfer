@@ -9,7 +9,7 @@ use env_logger;
 use chrono::Local;
 use rouille;
 
-use handlers;
+use handlers::{self, ToResponse};
 use sweep;
 use db;
 use models;
@@ -80,27 +80,27 @@ pub fn start(host: &str, port: u16) -> Result<()> {
                         BadRequest(ref s) => {
                             // bad request
                             let body = json!({"error": s});
-                            json_resp_unwrap!(body).with_status_code(400)
+                            body.to_resp().unwrap().with_status_code(400)
                         }
                         InvalidAuth(ref s) => {
                             // unauthorized
                             let body = json!({"error": s});
-                            json_resp_unwrap!(body).with_status_code(401)
+                            body.to_resp().unwrap().with_status_code(401)
                         }
                         DoesNotExist(ref s) => {
                             // not found
                             let body = json!({"error": s});
-                            json_resp_unwrap!(body).with_status_code(404)
+                            body.to_resp().unwrap().with_status_code(404)
                         }
                         UploadTooLarge(ref s) => {
                             // payload too large / request entity to large
                             let body = json!({"error": s});
-                            json_resp_unwrap!(body).with_status_code(413)
+                            body.to_resp().unwrap().with_status_code(413)
                         }
                         OutOfSpace(ref s) => {
                             // service unavailable
                             let body = json!({"error": s});
-                            json_resp_unwrap!(body).with_status_code(503)
+                            body.to_resp().unwrap().with_status_code(503)
                         }
                         _ => rouille::Response::text("Something went wrong").with_status_code(500),
                     }
@@ -118,10 +118,10 @@ fn route_request(request: &rouille::Request, db_pool: db::Pool) -> Result<rouill
             rouille::Response::html("<html><body> <p> hello </p> <script src=\"/assets/js/app.js\"></script></body></html>")
         },
         (GET) (/api/hello) => {
-            json_resp!(&json!({"message": "hey!"}))
+            json!({"message": "hey!"}).to_resp()?
         },
         (POST) (/api/bye) => {
-            json_resp!(&json!({"message": "bye!"}))
+            json!({"message": "bye!"}).to_resp()?
         },
         (POST) (/api/upload/init) => {
             handlers::api_upload_init(request, db_pool.get()?)?

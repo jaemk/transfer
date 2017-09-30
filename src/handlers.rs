@@ -6,6 +6,9 @@ use std::str::FromStr;
 use std::fs;
 
 use rouille;
+use serde;
+use serde_json;
+use serde_urlencoded;
 use hex::{FromHex, ToHex};
 use uuid::Uuid;
 use chrono::{Utc, Duration, DateTime};
@@ -14,6 +17,91 @@ use db;
 use auth;
 use models;
 use errors::*;
+
+
+// ------------------------------------------------
+// Traits for augmenting `rouille`
+// ------------------------------------------------
+
+/// Trait for parsing `json` from `rouille::Request` bodies into some type `T`
+///
+/// # Example
+///
+/// ```rust,ignore
+/// #[derive(Deserialize)]
+/// struct PostData {
+///     name: String,
+///     age: u32,
+/// }
+///```
+///
+/// For a request with a body containing `json`
+///
+/// ```rust,ignore
+/// let post_data = request.parse_body::<PostData>()?;
+/// println!("{}", post_data.name);
+/// ```
+pub trait FromRequestBody {
+    fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T>;
+}
+
+impl FromRequestBody for rouille::Request {
+    fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+        let mut body = self.data().expect("Can't read request body twice");
+        let mut s = String::new();
+        body.read_to_string(&mut s)?;
+        let data = serde_json::from_str::<T>(&s)
+            .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed data"))?;
+        Ok(data)
+    }
+}
+
+
+/// Trait for parsing query string parameters from `rouille::Request` urls into some type `T`
+///
+/// # Example
+///
+/// ```rust,ignore
+/// #[derive(Deserialize)]
+/// struct PostData {
+///     name: String,
+///     age: u32,
+/// }
+///```
+///
+/// For a request with url query parameters
+///
+/// ```rust,ignore
+/// let param_data = request.parse_params::<PostData>()?;
+/// println!("{}", post_data.name);
+/// ```
+pub trait FromRequestParams {
+    fn parse_params<T: serde::de::DeserializeOwned>(&self) -> Result<T>;
+}
+impl FromRequestParams for rouille::Request {
+    fn parse_params<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+        let qs = self.raw_query_string();
+        let params = serde_urlencoded::from_str::<T>(qs)
+            .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed data"))?;
+        Ok(params)
+    }
+}
+
+
+/// Trait for constructing `rouille::Response`s from other types
+pub trait ToResponse {
+    fn to_resp(&self) -> Result<rouille::Response>;
+}
+impl ToResponse for serde_json::Value {
+    fn to_resp(&self) -> Result<rouille::Response> {
+        let s = serde_json::to_string(self)?;
+        let resp = rouille::Response::from_data("application/json", s.as_bytes());
+        Ok(resp)
+    }
+}
+
+// -----------------------------------------------------------------------------
+
 
 
 /// Upload Initialize post info (in transport formatting)
@@ -72,7 +160,7 @@ struct UploadInit {
 ///   format!("{}/api/upload?key={}", "http://localhost:3000", "...long-key...")
 ///
 pub fn api_upload_init(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
-    let info = load_json!(request, UploadInitPost);
+    let info = request.parse_body::<UploadInitPost>()?;
     let info = info.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     if info.size > models::CONFIG.upload_limit_bytes {
@@ -109,7 +197,7 @@ pub fn api_upload_init(request: &rouille::Request, conn: db::DbConn) -> Result<r
         trans.commit()?;
     }
 
-    let resp = json_resp!(json!({"key": &uuid_hex}));
+    let resp = json!({"key": &uuid_hex}).to_resp()?;
     Ok(resp)
 }
 
@@ -128,7 +216,7 @@ struct UploadKey{
 ///     - Make sure the upload came within the upload time-out
 ///     - While reading the uploaded bytes, keep count and make sure the number of bytes <= state size
 pub fn api_upload_file(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
-    let upload_key = load_params!(request, UploadKey);
+    let upload_key = request.parse_params::<UploadKey>()?;
     let upload = {
         let now = Utc::now();
         let uuid = Uuid::from_str(&upload_key.key)?;
@@ -184,7 +272,7 @@ pub fn api_upload_file(request: &rouille::Request, conn: db::DbConn) -> Result<r
         }
     }
 
-    let resp = json_resp!(json!({"ok": "ok"}));
+    let resp = json!({"ok": "ok"}).to_resp()?;
     Ok(resp)
 }
 
@@ -212,7 +300,7 @@ struct DeleteKeyAccess {
 /// Deletes an upload by key. Only uploads that were created with a deletion password can be deleted.
 /// Deletion password must be present.
 pub fn api_upload_delete(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
-    let delete_key = load_json!(request, DeleteKeyAccessPost);
+    let delete_key = request.parse_body::<DeleteKeyAccessPost>()?;
     let delete_key = delete_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     {
@@ -238,7 +326,7 @@ pub fn api_upload_delete(request: &rouille::Request, conn: db::DbConn) -> Result
         }
         trans.commit()?;
     }
-    Ok(json_resp!(json!({"ok": "ok"})))
+    Ok(json!({"ok": "ok"}).to_resp()?)
 }
 
 
@@ -269,7 +357,7 @@ struct DownloadKeyAccess {
 /// needed for decryption).
 pub fn api_download_init(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
     let now = Utc::now();
-    let download_key = load_json!(request, DownloadKeyAccessPost);
+    let download_key = request.parse_body::<DownloadKeyAccessPost>()?;
     let download_key = download_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
 
@@ -300,19 +388,20 @@ pub fn api_download_init(request: &rouille::Request, conn: db::DbConn) -> Result
         trans.commit()?;
         (upload, init_download_content, init_download_confirm)
     };
-    Ok(json_resp!(json!({
+    let resp = json!({
         "nonce": upload.nonce.to_hex(),
         "size": upload.size,
         "download_key": init_download_content.uuid.as_bytes().to_hex(),
         "confirm_key": init_download_confirm.uuid.as_bytes().to_hex(),
-    })))
+    }).to_resp()?;
+    Ok(resp)
 }
 
 
 /// Download encrypted bytes
 pub fn api_download(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
     let now = Utc::now();
-    let download_key = load_json!(request, DownloadKeyAccessPost);
+    let download_key = request.parse_body::<DownloadKeyAccessPost>()?;
     let download_key = download_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     let upload = {
@@ -353,7 +442,7 @@ struct DownloadKeyHash {
 ///
 /// Upload identifier and a matching hash of the decrypted content are required
 pub fn api_download_confirm(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
-    let download_key = load_json!(request, DownloadKeyHash);
+    let download_key = request.parse_body::<DownloadKeyHash>()?;
     let uuid_bytes = Vec::from_hex(&download_key.key)?;
     let hash_bytes = Vec::from_hex(&download_key.hash)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
@@ -366,6 +455,6 @@ pub fn api_download_confirm(request: &rouille::Request, conn: db::DbConn) -> Res
         trans.commit()?;
         upload
     };
-    Ok(json_resp!(json!({"file_name": &upload.file_name})))
+    Ok(json!({"file_name": &upload.file_name}).to_resp()?)
 }
 
