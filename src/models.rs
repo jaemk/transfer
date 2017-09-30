@@ -31,6 +31,7 @@ pub struct Config {
     pub upload_lifespan_secs_default: i64,
     pub max_combined_upload_bytes: i64,
     pub download_timeout_secs: i64,
+    pub download_limit_default: Option<i32>,
 }
 
 

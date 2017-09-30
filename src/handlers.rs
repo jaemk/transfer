@@ -16,7 +16,7 @@ use chrono::{Utc, Duration, DateTime};
 
 use db;
 use auth;
-use models;
+use models::{self, CONFIG};
 use errors::*;
 
 
@@ -111,6 +111,17 @@ pub fn serve_file<T: AsRef<path::Path>>(mime: &'static str, path: T) -> Result<r
 }
 
 
+/// Return the default configurable upload constraints
+pub fn api_upload_defaults(_: &rouille::Request) -> Result<rouille::Response> {
+    let defaults = json!({
+        "upload_limit_bytes": CONFIG.upload_limit_bytes,
+        "upload_lifespan_secs_default": CONFIG.upload_lifespan_secs_default,
+        "download_limit_default": CONFIG.download_limit_default,
+    }).to_resp()?;
+    Ok(defaults)
+}
+
+
 /// Upload Initialize post info (in transport formatting)
 #[derive(Deserialize)]
 struct UploadInitPost {
@@ -139,7 +150,7 @@ impl UploadInitPost {
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
             deletion_password: deletion_password,
-            download_limit: self.download_limit.map(|n| n as i32),
+            download_limit: self.download_limit.map(|n| n as i32).and(CONFIG.download_limit_default),
             expire_date: expire_date,
         })
     }

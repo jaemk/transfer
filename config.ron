@@ -13,4 +13,7 @@
 
     // maximum timeout between initializing a download and downloading bytes
     download_timeout_secs: 120,
+
+    // default maximum download count for uploaded items
+    // download_limit_default: 5,
 )
