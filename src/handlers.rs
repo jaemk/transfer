@@ -3,6 +3,7 @@ Route handlers
 */
 use std::io::{self, Read, BufRead, Write};
 use std::str::FromStr;
+use std::path;
 use std::fs;
 
 use rouille;
@@ -102,6 +103,12 @@ impl ToResponse for serde_json::Value {
 
 // -----------------------------------------------------------------------------
 
+
+/// Return a `rouille::Response` for a given file
+pub fn serve_file<T: AsRef<path::Path>>(mime: &'static str, path: T) -> Result<rouille::Response> {
+    let file = fs::File::open(path.as_ref())?;
+    Ok(rouille::Response::from_file(mime, file))
+}
 
 
 /// Upload Initialize post info (in transport formatting)
@@ -425,8 +432,7 @@ pub fn api_download(request: &rouille::Request, conn: db::DbConn) -> Result<roui
         trans.commit()?;
         upload
     };
-    let file = fs::File::open(upload.file_path)?;
-    Ok(rouille::Response::from_file("application/octet-stream", file))
+    serve_file("application/octet-stream", upload.file_path)
 }
 
 
