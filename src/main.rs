@@ -1,47 +1,27 @@
 #![recursion_limit = "1024"]
-
 #[macro_use] extern crate error_chain;
 #[macro_use] extern crate clap;
-#[macro_use] extern crate lazy_static;
-#[macro_use] extern crate log;
-extern crate env_logger;
-extern crate chrono;
-extern crate hex;
-extern crate uuid;
-extern crate ring;
-extern crate crypto;
-extern crate r2d2;
-extern crate r2d2_postgres;
-extern crate postgres;
 extern crate migrant_lib;
-extern crate ron;
-extern crate serde;
-#[macro_use] extern crate serde_derive;
-#[macro_use] extern crate serde_json;
-extern crate serde_urlencoded;
-#[macro_use] extern crate rouille;
+extern crate transfer;
 
-#[macro_use] pub mod macros;
-pub mod service;
-pub mod sweep;
-pub mod handlers;
-pub mod db;
-pub mod models;
-pub mod auth;
-pub mod errors;
-pub mod admin;
-
+use clap::{Arg, ArgMatches, App, SubCommand};
+use migrant_lib::Config;
 use std::env;
-use clap::{Arg, App, SubCommand};
 
-use errors::*;
+error_chain! {
+    foreign_links {
+        Io(std::io::Error);
+        Migrant(migrant_lib::Error);
+        Transfer(transfer::errors::Error);
+    }
+}
 
 
-static APPNAME: &'static str = "Transfer";
+quick_main!(run);
 
 
 fn run() -> Result<()> {
-    let matches = App::new(APPNAME)
+    let matches = App::new(transfer::APPNAME)
         .version(crate_version!())
         .about("Secure Transfer Sever")
         .subcommand(SubCommand::with_name("serve")
@@ -73,7 +53,7 @@ fn run() -> Result<()> {
 
     match matches.subcommand() {
         ("admin", Some(admin_matches)) => {
-            admin::handle(&admin_matches)?;
+            admin(&admin_matches)?;
         }
         ("serve", Some(serve_matches)) => {
             env::set_var("LOG", "info");
@@ -81,14 +61,72 @@ fn run() -> Result<()> {
             if log_debug { env::set_var("LOG", "debug"); }
             let port = serve_matches.value_of("port").unwrap_or("3000").parse::<u16>().chain_err(|| "`--port` expects an integer")?;
             let host = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
-            service::start(&host, port)?;
+            transfer::service::start(&host, port)?;
         }
         _ => {
-            eprintln!("{}: see `--help`", APPNAME);
+            eprintln!("{}: see `--help`", transfer::APPNAME);
         }
     }
     Ok(())
 }
 
-quick_main!(run);
+
+pub fn admin(matches: &ArgMatches) -> Result<()> {
+    if let Some(db_matches) = matches.subcommand_matches("database") {
+        let dir = env::current_dir()?;
+        let config_path = match migrant_lib::search_for_config(&dir) {
+            None => {
+                Config::init_in(&dir)
+                    .for_database(Some("postgres"))?
+                    .initialize()?;
+                match migrant_lib::search_for_config(&dir) {
+                    None => bail!("Unable to find `.migrant.toml` even though it was just saved."),
+                    Some(p) => p,
+                }
+            }
+            Some(p) => p,
+        };
+
+        let config = Config::load_file_only(&config_path)?;
+
+        if db_matches.is_present("setup") {
+            config.setup()?;
+            return Ok(())
+        }
+
+        // load applied migrations from the database
+        let config = config.reload()?;
+
+        match db_matches.subcommand() {
+            ("shell", _) => {
+                migrant_lib::shell(&config)?;
+            }
+            ("migrate", _) => {
+                let res = migrant_lib::Migrator::with_config(&config)
+                    .direction(migrant_lib::Direction::Up)
+                    .all(true)
+                    .apply();
+                if let Err(ref err) = res {
+                    if let migrant_lib::Error::MigrationComplete(_) = *err {
+                        println!("Database is up-to-date!");
+                        return Ok(());
+                    }
+                }
+                let _ = res?;
+                return Ok(())
+            }
+            _ => println!("see `--help`"),
+        }
+
+        return Ok(())
+    }
+
+    if let Some(_) = matches.subcommand_matches("sweep-files") {
+        transfer::admin::sweep_files()?;
+        return Ok(())
+    }
+
+    println!("See: {} admin --help", transfer::APPNAME);
+    Ok(())
+}
 

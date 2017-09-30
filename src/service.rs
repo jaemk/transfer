@@ -9,10 +9,11 @@ use env_logger;
 use chrono::Local;
 use rouille;
 
-use handlers::{self, ToResponse};
+use handlers;
 use sweep;
 use db;
 use models;
+use {ToResponse};
 use errors::*;
 
 
@@ -74,7 +75,7 @@ pub fn start(host: &str, port: u16) -> Result<()> {
             match route_request(request, db_pool) {
                 Ok(resp) => resp,
                 Err(e) => {
-                    use ErrorKind::*;
+                    use self::ErrorKind::*;
                     error!("Handler Error: {}", e);
                     match *e {
                         BadRequest(ref s) => {

@@ -1,15 +1,12 @@
 /*!
 Route handlers
 */
-use std::io::{self, Read, BufRead, Write};
+use std::io::{self, BufRead, Write};
 use std::str::FromStr;
 use std::path;
 use std::fs;
 
 use rouille;
-use serde;
-use serde_json;
-use serde_urlencoded;
 use hex::{FromHex, ToHex};
 use uuid::Uuid;
 use chrono::{Utc, Duration, DateTime};
@@ -17,91 +14,8 @@ use chrono::{Utc, Duration, DateTime};
 use db;
 use auth;
 use models::{self, CONFIG};
+use {FromRequestBody, FromRequestParams, ToResponse};
 use errors::*;
-
-
-// ------------------------------------------------
-// Traits for augmenting `rouille`
-// ------------------------------------------------
-
-/// Trait for parsing `json` from `rouille::Request` bodies into some type `T`
-///
-/// # Example
-///
-/// ```rust,ignore
-/// #[derive(Deserialize)]
-/// struct PostData {
-///     name: String,
-///     age: u32,
-/// }
-///```
-///
-/// For a request with a body containing `json`
-///
-/// ```rust,ignore
-/// let post_data = request.parse_body::<PostData>()?;
-/// println!("{}", post_data.name);
-/// ```
-pub trait FromRequestBody {
-    fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T>;
-}
-
-impl FromRequestBody for rouille::Request {
-    fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
-        let mut body = self.data().expect("Can't read request body twice");
-        let mut s = String::new();
-        body.read_to_string(&mut s)?;
-        let data = serde_json::from_str::<T>(&s)
-            .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed data"))?;
-        Ok(data)
-    }
-}
-
-
-/// Trait for parsing query string parameters from `rouille::Request` urls into some type `T`
-///
-/// # Example
-///
-/// ```rust,ignore
-/// #[derive(Deserialize)]
-/// struct PostData {
-///     name: String,
-///     age: u32,
-/// }
-///```
-///
-/// For a request with url query parameters
-///
-/// ```rust,ignore
-/// let param_data = request.parse_params::<PostData>()?;
-/// println!("{}", post_data.name);
-/// ```
-pub trait FromRequestParams {
-    fn parse_params<T: serde::de::DeserializeOwned>(&self) -> Result<T>;
-}
-impl FromRequestParams for rouille::Request {
-    fn parse_params<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
-        let qs = self.raw_query_string();
-        let params = serde_urlencoded::from_str::<T>(qs)
-            .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed data"))?;
-        Ok(params)
-    }
-}
-
-
-/// Trait for constructing `rouille::Response`s from other types
-pub trait ToResponse {
-    fn to_resp(&self) -> Result<rouille::Response>;
-}
-impl ToResponse for serde_json::Value {
-    fn to_resp(&self) -> Result<rouille::Response> {
-        let s = serde_json::to_string(self)?;
-        let resp = rouille::Response::from_data("application/json", s.as_bytes());
-        Ok(resp)
-    }
-}
-
-// -----------------------------------------------------------------------------
 
 
 /// Return a `rouille::Response` for a given file
