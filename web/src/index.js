@@ -9,7 +9,6 @@ import Upload from './components/Upload';
 import Download from './components/Download';
 import Delete from './components/Delete';
 import NotFound from './components/NotFound';
-import registerServiceWorker from './registerServiceWorker';
 import 'bootstrap/dist/css/bootstrap.css';
 injectTapEventPlugin();
 
@@ -40,6 +39,4 @@ ReactDOM.render(
     </div>
   </Router>,
   document.getElementById('root'));
-
-registerServiceWorker();
 
