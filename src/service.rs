@@ -65,12 +65,6 @@ pub fn start(host: &str, port: u16) -> Result<()> {
         let db_pool = db_pool.clone();
 
         rouille::log(request, io::stdout(), move || {
-            { // static files
-                let static_resp = rouille::match_assets(&request, "static");
-                if static_resp.is_success() {
-                    return static_resp;
-                }
-            }
             // dispatch and handle errors
             match route_request(request, db_pool) {
                 Ok(resp) => resp,
@@ -131,7 +125,15 @@ fn route_request(request: &rouille::Request, db_pool: db::Pool) -> Result<rouill
         (POST)  (/api/download)         => { handlers::api_download(request, db_pool.get()?)? },
         (POST)  (/api/download/confirm) => { handlers::api_download_confirm(request, db_pool.get()?)? },
 
-        _ => bail_fmt!(ErrorKind::DoesNotExist, "nothing here")
+        _ => {
+            // static files
+            let static_resp = rouille::match_assets(&request, "static");
+            if static_resp.is_success() {
+                static_resp
+            } else {
+                bail_fmt!(ErrorKind::DoesNotExist, "nothing here")
+            }
+        }
     ))
 }
 

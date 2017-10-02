@@ -6,7 +6,7 @@ use std::str::FromStr;
 use std::path;
 use std::fs;
 
-use rouille;
+use rouille::{Request, Response};
 use hex::{FromHex, ToHex};
 use uuid::Uuid;
 use chrono::{Utc, Duration, DateTime};
@@ -19,14 +19,14 @@ use errors::*;
 
 
 /// Return a `rouille::Response` for a given file
-pub fn serve_file<T: AsRef<path::Path>>(mime: &'static str, path: T) -> Result<rouille::Response> {
+pub fn serve_file<T: AsRef<path::Path>>(mime: &'static str, path: T) -> Result<Response> {
     let file = fs::File::open(path.as_ref())?;
-    Ok(rouille::Response::from_file(mime, file))
+    Ok(Response::from_file(mime, file))
 }
 
 
 /// Return the default configurable upload constraints
-pub fn api_upload_defaults(_: &rouille::Request) -> Result<rouille::Response> {
+pub fn api_upload_defaults(_: &Request) -> Result<Response> {
     let defaults = json!({
         "upload_limit_bytes": CONFIG.upload_limit_bytes,
         "upload_lifespan_secs_default": CONFIG.upload_lifespan_secs_default,
@@ -91,7 +91,7 @@ struct UploadInit {
 /// e.g.)
 ///   format!("{}/api/upload?key={}", "http://localhost:3000", "...long-key...")
 ///
-pub fn api_upload_init(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+pub fn api_upload_init(request: &Request, conn: db::DbConn) -> Result<Response> {
     let info = request.parse_body::<UploadInitPost>()?;
     let info = info.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
@@ -147,7 +147,7 @@ struct UploadKey{
 ///     - Make sure the server has enough space available (using the previously reported file size).
 ///     - Make sure the upload came within the upload time-out
 ///     - While reading the uploaded bytes, keep count and make sure the number of bytes <= state size
-pub fn api_upload_file(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> {
     let upload_key = request.parse_params::<UploadKey>()?;
     let upload = {
         let now = Utc::now();
@@ -231,7 +231,7 @@ struct DeleteKeyAccess {
 
 /// Deletes an upload by key. Only uploads that were created with a deletion password can be deleted.
 /// Deletion password must be present.
-pub fn api_upload_delete(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+pub fn api_upload_delete(request: &Request, conn: db::DbConn) -> Result<Response> {
     let delete_key = request.parse_body::<DeleteKeyAccessPost>()?;
     let delete_key = delete_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
@@ -287,7 +287,7 @@ struct DownloadKeyAccess {
 ///
 /// Using a key and access-password, obtain the download meta-data (stuff
 /// needed for decryption).
-pub fn api_download_init(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+pub fn api_download_init(request: &Request, conn: db::DbConn) -> Result<Response> {
     let now = Utc::now();
     let download_key = request.parse_body::<DownloadKeyAccessPost>()?;
     let download_key = download_key.decode_hex()
@@ -331,7 +331,7 @@ pub fn api_download_init(request: &rouille::Request, conn: db::DbConn) -> Result
 
 
 /// Download encrypted bytes
-pub fn api_download(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+pub fn api_download(request: &Request, conn: db::DbConn) -> Result<Response> {
     let now = Utc::now();
     let download_key = request.parse_body::<DownloadKeyAccessPost>()?;
     let download_key = download_key.decode_hex()
@@ -372,7 +372,7 @@ struct DownloadKeyHash {
 /// Obtain the decrypted file's name
 ///
 /// Upload identifier and a matching hash of the decrypted content are required
-pub fn api_download_confirm(request: &rouille::Request, conn: db::DbConn) -> Result<rouille::Response> {
+pub fn api_download_confirm(request: &Request, conn: db::DbConn) -> Result<Response> {
     let download_key = request.parse_body::<DownloadKeyHash>()?;
     let uuid_bytes = Vec::from_hex(&download_key.key)?;
     let hash_bytes = Vec::from_hex(&download_key.hash)?;
