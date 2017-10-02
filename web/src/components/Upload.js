@@ -47,12 +47,13 @@ class Upload extends Component {
     }
 
     let errors = {};
-    const downloadLimit = parseInt(this.state.downloadLimit, 10);
-    if (isNaN(downloadLimit) || downloadLimit < 1 || downloadLimit > 999) {
+    const downloadLimit = (this.state.downloadLimit === '')? null : parseInt(this.state.downloadLimit, 10);
+    if (downloadLimit !== null && (isNaN(downloadLimit) || downloadLimit < 1 || downloadLimit > 999)) {
+      console.log(downloadLimit);
       errors.downloadLimit = 'expected an integer, 1 - 999';
     }
-    const lifespan = parseInt(this.state.lifespan, 10);
-    if (isNaN(lifespan) || lifespan < 1 || lifespan > 604800) {
+    const lifespan = (this.state.lifespan === '')? null : parseInt(this.state.lifespan, 10);
+    if (lifespan !== null && (isNaN(lifespan) || lifespan < 1 || lifespan > 604800)) {
       errors.lifespan = 'expected an integer, 1 - 604800';
     }
 
