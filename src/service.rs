@@ -110,7 +110,7 @@ pub fn start(host: &str, port: u16) -> Result<()> {
 fn route_request(request: &rouille::Request, db_pool: db::Pool) -> Result<rouille::Response> {
     Ok(router!(request,
         (GET) (/) => {
-            rouille::Response::html("<html><body> <p> hello </p> <script src=\"/assets/js/app.js\"></script></body></html>")
+            handlers::serve_file("text/html", "assets/main.html")?
         },
 
         (GET)   (/api/hello)    => { json!({"message": "hey!"}).to_resp()? },
@@ -127,7 +127,7 @@ fn route_request(request: &rouille::Request, db_pool: db::Pool) -> Result<rouill
 
         _ => {
             // static files
-            let static_resp = rouille::match_assets(&request, "static");
+            let static_resp = rouille::match_assets(&request, "assets");
             if static_resp.is_success() {
                 static_resp
             } else {
