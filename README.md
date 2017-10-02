@@ -5,15 +5,15 @@
 Also see the command line client, [`transfer-cli`](https://github.com/jaemk/transfer-cli)
 
 
-## Setup
+## Dev Setup
 
 - Server (base project dir):
     - `cargo install migrant --features postgresql`
     - `migrant init`
     - `migrant apply --all`
-    - `cargo run -- serve`
+    - `cargo run -- serve --port 3002`
     - configuration can be tweaked in `config.ron`
 - Webapp (`/web`):
-    - `npm run dev`
-    - open `http://localhost:8080`
-    
+    - `yarn start`
+    - open `http://localhost:3000`
+
