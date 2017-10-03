@@ -71,6 +71,7 @@ server {
     add_header X-Content-Type-Options nosniff;
     #add_header Content-Security-Policy "default-src https:";
 
+    client_max_body_size 200m;
 
     # OCSP Stapling ---
     # fetch OCSP records from URL in ssl_certificate and cache them
