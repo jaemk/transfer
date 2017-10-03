@@ -15,5 +15,5 @@
     download_timeout_secs: 120,
 
     // default maximum download count for uploaded items
-    // download_limit_default: 5,
+    // download_limit_default: Some(5),
 )

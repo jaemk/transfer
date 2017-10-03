@@ -57,15 +57,15 @@ pub static APPNAME: &'static str = "Transfer";
 /// For a request with a body containing `json`
 ///
 /// ```rust,ignore
-/// let post_data = request.parse_body::<PostData>()?;
+/// let post_data = request.parse_json_body::<PostData>()?;
 /// println!("{}", post_data.name);
 /// ```
 pub trait FromRequestBody {
-    fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T>;
+    fn parse_json_body<T: serde::de::DeserializeOwned>(&self) -> Result<T>;
 }
 
 impl FromRequestBody for rouille::Request {
-    fn parse_body<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+    fn parse_json_body<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let mut body = self.data().expect("Can't read request body twice");
         let mut s = String::new();
         body.read_to_string(&mut s)?;
@@ -91,14 +91,14 @@ impl FromRequestBody for rouille::Request {
 /// For a request with url query parameters
 ///
 /// ```rust,ignore
-/// let param_data = request.parse_params::<PostData>()?;
+/// let param_data = request.parse_query_params::<PostData>()?;
 /// println!("{}", post_data.name);
 /// ```
-pub trait FromRequestParams {
-    fn parse_params<T: serde::de::DeserializeOwned>(&self) -> Result<T>;
+pub trait FromRequestQuery {
+    fn parse_query_params<T: serde::de::DeserializeOwned>(&self) -> Result<T>;
 }
-impl FromRequestParams for rouille::Request {
-    fn parse_params<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
+impl FromRequestQuery for rouille::Request {
+    fn parse_query_params<T: serde::de::DeserializeOwned>(&self) -> Result<T> {
         let qs = self.raw_query_string();
         let params = serde_urlencoded::from_str::<T>(qs)
             .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed data"))?;

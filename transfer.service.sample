@@ -1,0 +1,23 @@
+# systemd config
+# copy to /lib/systemd/system/transfer.service
+#
+# systemctl daemon-reload
+# systemctl enable transfer.service
+# systemctl start transfer
+# systemctl status transfer.service
+# # tail the log
+# journalctl -f -u transfer
+[Unit]
+Description=Transfer App Server
+Requires=nginx.service
+Requires=postgresql.service
+After=postgresql.service
+
+[Service]
+WorkingDirectory=/<PATH_TO_PROJ_DIR>/transfer
+ExecStart=/<PATH_TO_EXEC>/transfer serve --port <PORT>
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+

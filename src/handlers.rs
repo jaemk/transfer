@@ -14,7 +14,7 @@ use chrono::{Utc, Duration, DateTime};
 use db;
 use auth;
 use models::{self, CONFIG};
-use {FromRequestBody, FromRequestParams, ToResponse};
+use {FromRequestBody, FromRequestQuery, ToResponse};
 use errors::*;
 
 
@@ -92,7 +92,7 @@ struct UploadInit {
 ///   format!("{}/api/upload?key={}", "http://localhost:3000", "...long-key...")
 ///
 pub fn api_upload_init(request: &Request, conn: db::DbConn) -> Result<Response> {
-    let info = request.parse_body::<UploadInitPost>()?;
+    let info = request.parse_json_body::<UploadInitPost>()?;
     let info = info.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     if info.size > models::CONFIG.upload_limit_bytes {
@@ -148,7 +148,7 @@ struct UploadKey{
 ///     - Make sure the upload came within the upload time-out
 ///     - While reading the uploaded bytes, keep count and make sure the number of bytes <= state size
 pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> {
-    let upload_key = request.parse_params::<UploadKey>()?;
+    let upload_key = request.parse_query_params::<UploadKey>()?;
     let upload = {
         let now = Utc::now();
         let uuid = Uuid::from_str(&upload_key.key)?;
@@ -232,7 +232,7 @@ struct DeleteKeyAccess {
 /// Deletes an upload by key. Only uploads that were created with a deletion password can be deleted.
 /// Deletion password must be present.
 pub fn api_upload_delete(request: &Request, conn: db::DbConn) -> Result<Response> {
-    let delete_key = request.parse_body::<DeleteKeyAccessPost>()?;
+    let delete_key = request.parse_json_body::<DeleteKeyAccessPost>()?;
     let delete_key = delete_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     {
@@ -289,7 +289,7 @@ struct DownloadKeyAccess {
 /// needed for decryption).
 pub fn api_download_init(request: &Request, conn: db::DbConn) -> Result<Response> {
     let now = Utc::now();
-    let download_key = request.parse_body::<DownloadKeyAccessPost>()?;
+    let download_key = request.parse_json_body::<DownloadKeyAccessPost>()?;
     let download_key = download_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
 
@@ -333,7 +333,7 @@ pub fn api_download_init(request: &Request, conn: db::DbConn) -> Result<Response
 /// Download encrypted bytes
 pub fn api_download(request: &Request, conn: db::DbConn) -> Result<Response> {
     let now = Utc::now();
-    let download_key = request.parse_body::<DownloadKeyAccessPost>()?;
+    let download_key = request.parse_json_body::<DownloadKeyAccessPost>()?;
     let download_key = download_key.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     let upload = {
@@ -373,7 +373,7 @@ struct DownloadKeyHash {
 ///
 /// Upload identifier and a matching hash of the decrypted content are required
 pub fn api_download_confirm(request: &Request, conn: db::DbConn) -> Result<Response> {
-    let download_key = request.parse_body::<DownloadKeyHash>()?;
+    let download_key = request.parse_json_body::<DownloadKeyHash>()?;
     let uuid_bytes = Vec::from_hex(&download_key.key)?;
     let hash_bytes = Vec::from_hex(&download_key.hash)?;
     let uuid = Uuid::from_bytes(&uuid_bytes)?;
