@@ -64,7 +64,7 @@ impl UploadInitPost {
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
             deletion_password: deletion_password,
-            download_limit: self.download_limit.map(|n| n as i32).and(CONFIG.download_limit_default),
+            download_limit: self.download_limit.map(|n| n as i32).or(CONFIG.download_limit_default),
             expire_date: expire_date,
         })
     }

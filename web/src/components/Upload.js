@@ -106,11 +106,13 @@ class Upload extends Component {
         const contentHashHex = Buffer.from(contentHash).toString('Hex')
         console.log('content hash', contentHashHex)
         const params = {
+          nonce: nonceHex,
           file_name: file.name,
           content_hash: contentHashHex,
-          nonce: nonceHex,
           access_password: accessPassHex,
-          deletion_password: deletePassHex
+          deletion_password: deletePassHex,
+          download_limit: downloadLimit,
+          lifespan: lifespan,
         }
         const headers = {headers: {'content-type': 'application/json'}}
         encryptUploadData(data, params, headers)
