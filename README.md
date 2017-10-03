@@ -22,7 +22,7 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
 
 ## Release Builds
 
-> Cross compilation setup for the server `rust` executable
+> Cross compilation setup for the server executable (`rust`)
 
 - Install [`docker`](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-16-04)
     - Add yourself to the `docker` group: `sudo usermod -a -G docker <user>`
@@ -35,4 +35,21 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
     - `build.py server`
 - Build frontend app and copy bundled files to their static-file locations
     - `build.py web`
+
+
+## Deployment
+
+- Initial
+    - Clone this repo
+    - `bin/x86_64/transfer admin database setup`
+        - run suggested commands to create database if it doesn't exist
+        - run `admin database setup` again
+    - `bin/x86_64/transfer admin database migrate`
+    - Copy `nginx.conf.sample` to `/etc/nginx/sites-available/transfer` and update details
+    - Copy `transfer.service.sample` to `/etc/lib/systemd/system/transfer.service` and update details
+    - `systemctl restart nginx` & `systemctl restart transfer`
+- Updates
+    - `git pull`
+    - `bin/x86_64/transfer admin database migrate`
+    - `systemctl restart transfer`
 
