@@ -33,7 +33,7 @@ pub mod admin;
 
 use std::io::Read;
 use errors::*;
-
+pub use models::CONFIG;
 
 pub static APPNAME: &'static str = "Transfer";
 

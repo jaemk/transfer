@@ -1,4 +1,6 @@
 (
+    app_version: "0.1.1",
+
     // max bytes of a single upload
     upload_limit_bytes: 200000000,      // 200mb
 
