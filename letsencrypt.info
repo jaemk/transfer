@@ -1,0 +1,21 @@
+# letsencrypt setup
+
+cd <PROJ_BASE>
+mkdir -p assets/static/acme_challenge
+
+#add an nginx root path:
+location /.well-known/acme-challenge {
+    default_type "text/plain";
+    root /<PATH_TO_PROJ_BASE>/assets/static/acme_challenge/;
+}
+
+git clone https://github.com/certbot/certbot
+
+# from within the certbot proj dir
+./letsencrypt-auto certonly --webroot --webroot-path /<PATH_TO_PROJ_BASE>/assets/static/acme_challenge --email [EMAIL] -d [DOMAIN]
+
+./letencrypt-auto renew
+
+# generate a dhparam.pem for nginx: ssl_dhparam  -- if it doesn't exist (takes a long time)
+cd /etc/ssl/certs
+openssl dhparam -out dhparam.pem 4096
