@@ -1,6 +1,6 @@
 [package]
 name = "transfer"
-version = "0.1.0"
+version = "0.0.0"  # managed in `config.ron`
 authors = ["James Kominick <james.kominick@gmail.com>"]
 
 [dependencies]

@@ -16,16 +16,16 @@ use errors::*;
 
 lazy_static! {
     pub static ref CONFIG: Config = {
-        let f = fs::File::open("config.ron").expect("Failed opening config file");
-        let config = ron::de::from_reader(f).expect("Failed parsing config file");
-        info!("** Config file `config.ron` loaded **");
-        config
+        let cwd = env::current_dir().expect("current dir error");
+        let f = fs::File::open(cwd.join("config.ron")).expect("Failed opening config file");
+        ron::de::from_reader(f).expect("Failed parsing config file")
     };
 }
 
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
+    pub app_version: String,
     pub upload_limit_bytes: i64,
     pub upload_timeout_secs: i64,
     pub upload_lifespan_secs_default: i64,

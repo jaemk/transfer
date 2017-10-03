@@ -1,6 +1,6 @@
 #![recursion_limit = "1024"]
 #[macro_use] extern crate error_chain;
-#[macro_use] extern crate clap;
+extern crate clap;
 extern crate migrant_lib;
 extern crate transfer;
 
@@ -22,7 +22,7 @@ quick_main!(run);
 
 fn run() -> Result<()> {
     let matches = App::new(transfer::APPNAME)
-        .version(crate_version!())
+        .version(&*transfer::CONFIG.app_version)
         .about("Secure Transfer Sever")
         .subcommand(SubCommand::with_name("serve")
             .about("Initialize Server")
