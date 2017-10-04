@@ -6,6 +6,7 @@ import axios from 'axios';
 import FileSaver from 'file-saver';
 import TextField from './TextField';
 import PasswordField from './PasswordField';
+import ProgressBar from './ProgressBar';
 import { logerr } from '../utils/errors';
 import { decrypt, bytesFromHex } from '../utils/crypto';
 
@@ -22,11 +23,18 @@ class Download extends Component {
       accessPass: '',
       encryptPass: '',
       errorMessage: '',
+
+      downloadProgress: 0,
+      decryptProgress: 0,
+
       submitted: false,
       inputOk: false,
       required: {},
+
+      responseStatus: null,
     };
     this.download = this.download.bind(this);
+    this.catchErr = this.catchErr.bind(this);
   }
 
   componentWillMount() {
@@ -36,6 +44,11 @@ class Download extends Component {
     if (key) {
       this.setState({key: key});
     }
+  }
+
+  catchErr(err) {
+    logerr(err);
+    this.setState({responseStatus: err.response.status});
   }
 
   download() {
@@ -57,51 +70,82 @@ class Download extends Component {
     if (!inputOk) {
       return;
     }
+    this.setState({
+      downloadProgress: 5,
+      decryptProgress: 5,
+    });
 
     const decryptedBytesCallback = (bytes, confirmKey) => {
+      this.setState({decryptProgress: this.state.decryptProgress + 40});
       window.crypto.subtle.digest('SHA-256', bytes).then(contentHash => {
+        this.setState({decryptProgress: 100});
         const hex = Buffer.from(contentHash).toString('hex')
         console.log('decrypted bytes hex', hex)
         const params = {key: confirmKey, hash: hex}
         console.log(`params: ${params}`)
         const headers = {headers: {'content-type': 'application/json'}}
         axios.post('/api/download/confirm', params, headers).then(resp => {
+          this.setState({responseStatus: resp.status});
           const blob = new Blob([bytes], {type: 'application/octet-stream'})
           FileSaver.saveAs(blob, resp.data.file_name)
-        }).catch(logerr)
-      }).catch(logerr)
+        }).catch(this.catchErr)
+      }).catch(this.catchErr)
     }
 
     const decryptionFailedCallback = e => {
       logerr(e)
-      this.setState({errorMessage: 'Decryption Failed'});
+      this.setState({responseStatus: 'failed-dec'});
     }
 
     const params = {key: this.state.key, access_password: Buffer.from(this.state.accessPass).toString('hex')}
     const headers = {headers: {'content-type': 'application/json'}}
     axios.post('/api/download/init', params, headers).then(resp => {
       const nonce = new Uint8Array(bytesFromHex(resp.data.nonce))
-      console.log(`nonce: ${nonce}`)
-      const DLheaders = {headers: {'content-type': 'application/json'}, responseType: 'arraybuffer'}
+      const DLheaders = {
+        headers: {'content-type': 'application/json'},
+        responseType: 'arraybuffer',
+        onDownloadProgress: (event) => {
+          this.setState({downloadProgress: (event.loaded / resp.data.size * 100)});
+        },
+      };
+
       params.key = resp.data.download_key
       const confirmKey = resp.data.confirm_key
-      console.log(params)
       axios.post('/api/download', params, DLheaders).then(resp => {
-        console.log('post dl')
-        console.log(resp)
+        this.setState({downloadProgress: 100});
         const dataBytes = resp.data
-        console.log(dataBytes)
         const encryptPassBytes = new TextEncoder().encode(this.state.encryptPass)
-        console.log('encrytion pass', encryptPassBytes)
         decrypt(dataBytes, nonce, encryptPassBytes,
                 (bytes) => decryptedBytesCallback(bytes, confirmKey),
                 decryptionFailedCallback)
-      }).catch(logerr)
-    }).catch(logerr)
+      }).catch(this.catchErr)
+    }).catch(this.catchErr)
   }
 
   render() {
     const disable = this.state.submitted && this.state.inputOk;
+    let message = null;
+    switch (this.state.responseStatus) {
+      case null:
+        break;
+      case 'failed-dev':
+        message = <div> Decryption Failed </div>;
+        break;
+      case 200:
+        message = <div> Success! </div>;
+        break;
+      case 400:
+        message = <div> Bad Request </div>;
+        break;
+      case 401:
+        message = <div> Invalid credentials </div>;
+        break;
+      case 404:
+        message = <div> Item not found </div>;
+        break;
+      default:
+        message = <div> Something went wrong </div>;
+    }
     return (
       <div>
         <Form inline onSubmit={this.download}>
@@ -138,6 +182,44 @@ class Download extends Component {
             Download {'&'} Decrypt
           </Button>
         </Form>
+
+        {
+          disable?
+            <div>
+              <h3> Progress </h3>
+              <div>
+                {(this.state.downloadProgress > 0)?
+                  <ProgressBar
+                    title="Downloading File:"
+                    active={this.state.downloadProgress < 100}
+                    progress={this.state.downloadProgress}
+                  />
+                    :
+                  ''
+                }
+              </div>
+              <div>
+                {(this.state.decryptProgress > 0)?
+                  <ProgressBar
+                    title="Decrypting File:"
+                    active={this.state.decryptProgress < 100}
+                    progress={this.state.decryptProgress}
+                  />
+                    :
+                  ''
+                }
+              </div>
+            </div>
+            :
+            ''
+        }
+        {
+          (message === null)?
+            ''
+            :
+            message
+        }
+
       </div>
     )
   }

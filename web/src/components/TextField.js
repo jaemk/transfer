@@ -2,7 +2,7 @@ import React from 'react';
 import { FormGroup, FormControl, ControlLabel } from 'react-bootstrap';
 
 
-const TextField = ({title, value, update, disabled=false, required=false, error=null}) => {
+const TextField = ({title, value, update, type="text", disabled=false, required=false, error=null}) => {
   let validState = null;
   if (required) { validState = 'warning'; }
   if (error) { validState = 'error'; }
@@ -18,7 +18,7 @@ const TextField = ({title, value, update, disabled=false, required=false, error=
         <ControlLabel>{title}</ControlLabel>
         {' '}
         <FormControl
-          type="text"
+          type={type}
           value={value}
           placeholder={title}
           onChange={(e) => update(e.target.value)}
