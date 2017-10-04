@@ -4,3 +4,6 @@
 
 uploads/*
 !uploads/.gitkeep
+
+assets/static/acme_challenge
+
