@@ -21,13 +21,13 @@ server {
     ## webroot location for letsencrypt
     location /.well-known/acme-challenge {
         default_type "text/plain";
-        root /<PATH_TO_PROJ_ROOT>/static/acme_challenge/;
+        root /<PATH_TO_PROJ_ROOT>/assets/static/acme_challenge/;
     }
 
     # or serve over http:
     #
     # location /static/ {
-    #     alias /<PATH_TO_PROJ_BASE>/static/;
+    #     alias /<PATH_TO_PROJ_BASE>/assets/static/;
     # }
     #
     # location / {
@@ -84,7 +84,7 @@ server {
     # webroot location for letsencrypt
     location /.well-known/acme-challenge {
         default_type "text/plain";
-        root /<PATH_TO_PROJ_ROOT>/static/acme_challenge/;
+        root /<PATH_TO_PROJ_ROOT>/assets/static/acme_challenge/;
     }
 
     location /static/ {
