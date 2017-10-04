@@ -5,6 +5,7 @@ import axios from 'axios';
 import PasswordField from './PasswordField';
 import TextField from './TextField';
 import FileField from './FileField';
+import ProgressBar from './ProgressBar';
 import { logerr } from '../utils/errors';
 import { randomBytes, encrypt } from '../utils/crypto';
 
@@ -20,19 +21,29 @@ class Upload extends Component {
       downloadLimit: '',
       lifespan: '',
 
+      loadProgress: 0,
+      encryptProgress: 0,
+      uploadProgress: 0,
+
       downloadUrl: null,
       submitted: false,
       inputOk: false,
       required: {},
       errors: {},
+
+      responseStatus: null,
     };
     this.submit = this.submit.bind(this);
+    this.catchErr = this.catchErr.bind(this);
+  }
+
+  catchErr(err) {
+    logerr(err);
+    this.setState({responseStatus: err.response.status});
   }
 
 
   submit(e) {
-    console.log(this.state);
-
     let file = document.getElementById('file').files[0]
 
     let required = {};
@@ -49,7 +60,6 @@ class Upload extends Component {
     let errors = {};
     const downloadLimit = (this.state.downloadLimit === '')? null : parseInt(this.state.downloadLimit, 10);
     if (downloadLimit !== null && (isNaN(downloadLimit) || downloadLimit < 1 || downloadLimit > 999)) {
-      console.log(downloadLimit);
       errors.downloadLimit = 'expected an integer, 1 - 999';
     }
     const lifespan = (this.state.lifespan === '')? null : parseInt(this.state.lifespan, 10);
@@ -66,6 +76,12 @@ class Upload extends Component {
       return;
     }
 
+    this.setState({
+      loadProgress: 5,
+      encryptProgress: 5,
+      uploadProgress: 5,
+    });
+
     const nonce = randomBytes(12)
     const encryptPassBytes = new TextEncoder().encode(this.state.encryptPass)
     const accessPassBytes = new TextEncoder().encode(this.state.accessPass)
@@ -79,17 +95,25 @@ class Upload extends Component {
 
     const encryptUploadData = (data, params, headers) => {
       const encryptedBytesCallback = (bytes) => {
+        this.setState({encryptProgress: 100});
         params.size = bytes.length
         axios.post('/api/upload/init', params, headers).then(resp => {
           const key = resp.data.key
-          console.log(`got key ${key}`)
-          axios.post(`/api/upload?key=${key}`, bytes, {headers: {'content-type': 'application/octet-stream'}})
+          this.setState({key: key});
+          const config = {
+            headers: {'content-type': 'application/octet-stream'},
+            onUploadProgress: (event) => this.setState({uploadProgress: (event.loaded / event.total * 100)}),
+          };
+          axios.post(`/api/upload?key=${key}`, bytes, config)
             .then(resp => {
-              console.log(resp.data)
-              console.log(`key: ${key}`)
-              this.setState({downloadUrl: `/download?key=${key}`});
-            }).catch(logerr)
-        }).catch(logerr)
+              console.log(resp);
+              this.setState({
+                downloadUrl: `/download?key=${key}`,
+                uploadProgress: 100,
+                responseStatus: resp.status,
+              });
+            }).catch(this.catchErr)
+        }).catch(this.catchErr)
       }
       encrypt(data, nonce, encryptPassBytes, encryptedBytesCallback)
     }
@@ -97,12 +121,15 @@ class Upload extends Component {
     let reader = new FileReader()
     reader.onload = (event) => {
       if (reader.readyState !== 2) {
-        console.log(`read ${event.loaded} bytes`)
         return
       }
+      console.log(`done: read ${event.loaded} bytes`)
+      this.setState({loadProgress: 100});
+
       const data = reader.result
       console.log(`loaded ${data.byteLength} bytes`)
       window.crypto.subtle.digest('SHA-256', data).then(contentHash => {
+        this.setState({encryptProgress: this.state.encryptProgress + 60});
         const contentHashHex = Buffer.from(contentHash).toString('Hex')
         console.log('content hash', contentHashHex)
         const params = {
@@ -116,23 +143,42 @@ class Upload extends Component {
         }
         const headers = {headers: {'content-type': 'application/json'}}
         encryptUploadData(data, params, headers)
-      }).catch(logerr)
+      }).catch(this.catchErr)
+    }
+    reader.onprogress = (event) => {
+      console.log(`in progress: read ${event.loaded} bytes`);
+      const progress = event.loaded / event.total * 100;
+      this.setState({loadProgress: progress});
     }
     reader.readAsArrayBuffer(file)
   }
 
   render() {
     const disable = this.state.submitted && this.state.inputOk;
+    let message = null;
+    switch (this.state.responseStatus) {
+      case null:
+        break;
+      case 'failed-dev':
+        message = <div> Decryption Failed </div>;
+        break;
+      case 200:
+        message = <div> Success! </div>;
+        break;
+      case 400:
+        message = <div> Bad Request </div>;
+        break;
+      case 401:
+        message = <div> Invalid credentials </div>;
+        break;
+      case 404:
+        message = <div> Item not found </div>;
+        break;
+      default:
+        message = <div> Something went wrong </div>;
+    }
     return (
       <div>
-        {
-          this.state.downloadUrl?
-            <NavLink to={this.state.downloadUrl}>
-              Download here: {`http://${window.location.host}${this.state.downloadUrl}`}
-            </NavLink>
-            :
-            ''
-        }
         <Form inline onSubmit={this.submit}>
           <FileField
             title="Upload file"
@@ -167,6 +213,7 @@ class Upload extends Component {
 
           <TextField
             title="Download Limit"
+            type="number"
             value={this.state.downloadLimit}
             disabled={disable}
             update={(v) => this.setState({downloadLimit: v})}
@@ -177,6 +224,7 @@ class Upload extends Component {
 
           <TextField
             title="Lifespan (seconds)"
+            type="number"
             value={this.state.lifespan}
             disabled={disable}
             update={(v) => this.setState({lifespan: v})}
@@ -193,6 +241,80 @@ class Upload extends Component {
             Encrypt {'&'} Upload
           </Button>
         </Form>
+
+        <br/>
+
+        {
+          disable?
+            <div>
+              <h3> Progress </h3>
+              <div>
+                {(this.state.loadProgress > 0)?
+                  <ProgressBar
+                    title="Loading File:"
+                    active={this.state.loadProgress < 100}
+                    progress={this.state.loadProgress}
+                  />
+                    :
+                  ''
+                }
+              </div>
+              <div>
+                {(this.state.encryptProgress > 0)?
+                  <ProgressBar
+                    title="Encrypting File:"
+                    active={this.state.encryptProgress < 100}
+                    progress={this.state.encryptProgress}
+                  />
+                    :
+                  ''
+                }
+              </div>
+              <div>
+                {(this.state.uploadProgress > 0)?
+                  <ProgressBar
+                    title="Uploading File:"
+                    active={this.state.uploadProgress < 100}
+                    progress={this.state.uploadProgress}
+                  />
+                    :
+                  ''
+                }
+              </div>
+
+              {
+                this.state.key?
+                  <div>
+                    Upload/Download Key: <code> {this.state.key} </code>
+                  </div>
+                  :
+                  ''
+              }
+
+              {
+                this.state.downloadUrl?
+                  <div>
+                    Download Link:
+                    <code>
+                      <NavLink to={this.state.downloadUrl}>
+                        {`http://${window.location.host}${this.state.downloadUrl}`}
+                      </NavLink>
+                    </code>
+                  </div>
+                  :
+                  ''
+              }
+            </div>
+            :
+            ''
+        }
+
+        {
+          (message === null)?
+            ''
+            :
+            message
+        }
       </div>
     )
   }
