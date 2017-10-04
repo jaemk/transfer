@@ -174,6 +174,9 @@ class Upload extends Component {
       case 404:
         message = <div> Item not found </div>;
         break;
+      case 413:
+        message = <div> Upload too large </div>;
+        break;
       default:
         message = <div> Something went wrong </div>;
     }
