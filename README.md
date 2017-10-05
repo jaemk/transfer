@@ -8,7 +8,8 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
 ## Development
 
 - Backend:
-    - [install `rust`](https://www.rust-lang.org/en-US/install.html)
+    - Install [`rust`](https://www.rust-lang.org/en-US/install.html)
+    - Install `postgres`: `apt install postgresql libpq-dev`
     - Install [`migrant`](https://github.com/jaemk/migrant) (migration manager):
         - `cargo install migrant --features postgresql`
     - Initialize database (postgres):
@@ -20,8 +21,8 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
         - Configuration can be tweaked in `config.ron`
     - Poke around in the database: `migrant shell`
 - Frontend (`/web`):
-    - [intall `npm`](https://www.npmjs.com/get-npm)
-    - [install `yarn`](https://yarnpkg.com/en/docs/install)
+    - Install [`npm`](https://www.npmjs.com/get-npm)
+    - Install [`yarn`](https://yarnpkg.com/en/docs/install)
     - Build a run frontend dev server
         - `yarn start`
         - Open `http://localhost:3000`
