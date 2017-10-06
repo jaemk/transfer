@@ -7,6 +7,7 @@ use sweep;
 use errors::*;
 
 
+/// Cleanup files that no longer have an associated record in the database
 pub fn sweep_files() -> Result<()> {
     let dir = env::current_dir()?;
     let upload_dir = dir.join("uploads");

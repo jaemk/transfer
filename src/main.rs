@@ -30,7 +30,8 @@ fn run() -> Result<()> {
                 .long("port")
                 .short("p")
                 .takes_value(true)
-                .help("Port to listen on. Defaults to 3000"))
+                .default_value("3002")
+                .help("Port to listen on."))
             .arg(Arg::with_name("public")
                 .long("public")
                 .help("Serve on '0.0.0.0' instead of 'localhost'"))
@@ -57,9 +58,11 @@ fn run() -> Result<()> {
         }
         ("serve", Some(serve_matches)) => {
             env::set_var("LOG", "info");
-            let log_debug = serve_matches.is_present("debug");
-            if log_debug { env::set_var("LOG", "debug"); }
-            let port = serve_matches.value_of("port").unwrap_or("3000").parse::<u16>().chain_err(|| "`--port` expects an integer")?;
+            if serve_matches.is_present("debug") { env::set_var("LOG", "debug"); }
+            let port = serve_matches.value_of("port")
+                .expect("default port should be set by clap")
+                .parse::<u16>()
+                .chain_err(|| "`--port` expects an integer")?;
             let host = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
             transfer::service::start(&host, port)?;
         }
@@ -87,6 +90,7 @@ pub fn admin(matches: &ArgMatches) -> Result<()> {
             Some(p) => p,
         };
 
+        // don't check database migration table since it may not be setup yet
         let config = Config::load_file_only(&config_path)?;
 
         if db_matches.is_present("setup") {
@@ -112,12 +116,12 @@ pub fn admin(matches: &ArgMatches) -> Result<()> {
                         return Ok(());
                     }
                 }
+                // propagate other errors
                 let _ = res?;
                 return Ok(())
             }
             _ => println!("see `--help`"),
         }
-
         return Ok(())
     }
 
