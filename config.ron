@@ -1,9 +1,8 @@
 (
-    app_version: "0.3.0",
+    app_version: "0.3.1",
 
     // max bytes of a single upload
     // NOTE: be sure to update `client_max_body_size` in your nginx config
-    //       if `proxy_request_buffering on`
     upload_limit_bytes: 200000000,      // 200mb
 
     // maximum timeout between initializing an upload and uploading bytes
