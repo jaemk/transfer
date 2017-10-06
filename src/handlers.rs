@@ -174,32 +174,36 @@ pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> 
     let mut byte_count = 0;
     let mut file = fs::File::create(&upload.file_path)?;
     let mut stream = io::BufReader::new(request.data().expect("body already read"));
-    let stated_upload_size = upload.size;
+    let stated_upload_size = upload.size as usize;  // db stores i64
     loop {
         let n = {
-            let mut buf = stream.fill_buf()?;
-            file.write_all(&mut buf)?;
+            let buf = stream.fill_buf()?;
+            file.write_all(&buf)?;
             buf.len()
         };
         stream.consume(n);
         if n == 0 { break; }
+
         byte_count += n;
-        if byte_count as i64 > stated_upload_size {
+        if byte_count > stated_upload_size {
             error!("Upload larger than previously stated");
+            // delete the entry we just made
+            upload.delete(&*conn)?;
             // if the file deletion fails, the file will eventually be cleaned up
             // by the `admin sweep-files` command
             fs::remove_file(&upload.file_path).ok();
-            // drain the rest of the stream
+            // See if we can drain the rest of the stream and send a real response
+            // before we kill the connection
+            let mut over = 0;
             loop {
                 let n = {
                     let buf = stream.fill_buf()?;
                     buf.len()
                 };
                 stream.consume(n);
-                if n == 0 { break; }
+                over += n;
+                if n == 0 || over >= 10_000 { break; }
             }
-            // delete the entry we just made
-            upload.delete(&*conn)?;
             bail_fmt!(ErrorKind::UploadTooLarge, "Upload larger than previously stated: {}", stated_upload_size)
         }
     }
