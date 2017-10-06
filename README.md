@@ -8,7 +8,8 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
 ## Development
 
 - Backend:
-    - [install `rust`](https://www.rust-lang.org/en-US/install.html)
+    - Install [`rust`](https://www.rust-lang.org/en-US/install.html)
+    - Install `postgres`: `apt install postgresql libpq-dev`
     - Install [`migrant`](https://github.com/jaemk/migrant) (migration manager):
         - `cargo install migrant --features postgresql`
     - Initialize database (postgres):
@@ -19,19 +20,20 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
         - `cargo run -- serve --port 3002`
         - Configuration can be tweaked in `config.ron`
     - Poke around in the database: `migrant shell`
-- Frontend (`/web`):
-    - [intall `npm`](https://www.npmjs.com/get-npm)
-    - [install `yarn`](https://yarnpkg.com/en/docs/install)
+- Frontend (inside `/web`):
+    - Install [`npm`](https://www.npmjs.com/get-npm)
+    - Install [`yarn`](https://yarnpkg.com/en/docs/install)
     - Build a run frontend dev server
         - `yarn start`
         - Open `http://localhost:3000`
         - Api requests are proxied to the backend: `localhost:3002`
 
-Note: This project uses the `GitFlow` branching model
+Note: This project uses the `GitFlow` branching model, all pr's should be made to `develop`.
 
 
 ## Release Builds
 
+To allow simple deployments, production/release artifacts are compiled and checked-in with tagged `releases` and `hotfixes`.
 Both the backend (`rust`) and frontend (`react.js`) must be (re)compiled (only when code changes) for tagged commits (`releases` and `hotfixes`)
 
 - Backend (`Rust` setup for cross-compilation)
@@ -39,19 +41,21 @@ Both the backend (`rust`) and frontend (`react.js`) must be (re)compiled (only w
         - Add yourself to the `docker` group: `sudo usermod -a -G docker <user>`
         - Restart to pick up changes (logging in & out may suffice)
         - You should be able to run `docker version` without any errors
-        - See `More on Docker and Cross` below for extra info
         - May need to start the Docker daemon if it's not already running: `sudo systemctl start docker` (not sure about windows/os-x)
     - Install [`cross`](https://github.com/japaric/cross): `cargo install cross`
-    - Build server executables for targets listed in `build.py` script:
+    - Build server executables for targets listed in `build.py` script (currently only `x86_64`):
         - `build.py server`
 - Frontend (`React`)
-    - Build frontend app and copy bundled files to their static-file locations
+    - Build frontend app bundles and copy to their static-file locations
         - `build.py web`
 
-To allow simple deployments, production/release artifacts are compiled and checked-in with tagged `releases` and `hotfixes`.
 
 
 ## Deployment
+
+> `postgres` & `nginx` are required
+
+Note, the `master` branch is the release channel. All releases are tagged to allow easily jumping between versions.
 
 - Initial
     - Clone this repo
@@ -68,4 +72,8 @@ To allow simple deployments, production/release artifacts are compiled and check
     - `git pull --rebase=false`
     - `bin/x86_64/transfer admin database migrate`
     - `systemctl restart transfer`
+- Selecting a specific version
+    - `git fetch --all --tags`
+    - `git checkout <tag>`
+    - back to latest: `git checkout master`
 

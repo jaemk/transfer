@@ -151,7 +151,8 @@ pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> 
     let upload_key = request.parse_query_params::<UploadKey>()?;
     let upload = {
         let now = Utc::now();
-        let uuid = Uuid::from_str(&upload_key.key)?;
+        let uuid = Uuid::from_str(&upload_key.key)
+            .map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?;
 
         let trans = conn.transaction()?;
         let init_upload = models::InitUpload::find(&trans, &uuid)?;
@@ -174,32 +175,36 @@ pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> 
     let mut byte_count = 0;
     let mut file = fs::File::create(&upload.file_path)?;
     let mut stream = io::BufReader::new(request.data().expect("body already read"));
-    let stated_upload_size = upload.size;
+    let stated_upload_size = upload.size as usize;  // db stores i64
     loop {
         let n = {
-            let mut buf = stream.fill_buf()?;
-            file.write_all(&mut buf)?;
+            let buf = stream.fill_buf()?;
+            file.write_all(&buf)?;
             buf.len()
         };
         stream.consume(n);
         if n == 0 { break; }
+
         byte_count += n;
-        if byte_count as i64 > stated_upload_size {
+        if byte_count > stated_upload_size {
             error!("Upload larger than previously stated");
+            // delete the entry we just made
+            upload.delete(&*conn)?;
             // if the file deletion fails, the file will eventually be cleaned up
             // by the `admin sweep-files` command
             fs::remove_file(&upload.file_path).ok();
-            // drain the rest of the stream
+            // See if we can drain the rest of the stream and send a real response
+            // before we kill the connection
+            let mut over = 0;
             loop {
                 let n = {
                     let buf = stream.fill_buf()?;
                     buf.len()
                 };
                 stream.consume(n);
-                if n == 0 { break; }
+                over += n;
+                if n == 0 || over >= 10_000 { break; }
             }
-            // delete the entry we just made
-            upload.delete(&*conn)?;
             bail_fmt!(ErrorKind::UploadTooLarge, "Upload larger than previously stated: {}", stated_upload_size)
         }
     }
@@ -217,8 +222,8 @@ struct DeleteKeyAccessPost {
 impl DeleteKeyAccessPost {
     fn decode_hex(&self) -> Result<DeleteKeyAccess> {
         Ok(DeleteKeyAccess {
-            uuid: Uuid::from_str(&self.key)?,
-            deletion_password: Vec::from_hex(&self.deletion_password)?,
+            uuid: Uuid::from_str(&self.key).map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?,
+            deletion_password: Vec::from_hex(&self.deletion_password).map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?,
         })
     }
 }
@@ -233,8 +238,7 @@ struct DeleteKeyAccess {
 /// Deletion password must be present.
 pub fn api_upload_delete(request: &Request, conn: db::DbConn) -> Result<Response> {
     let delete_key = request.parse_json_body::<DeleteKeyAccessPost>()?;
-    let delete_key = delete_key.decode_hex()
-        .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
+    let delete_key = delete_key.decode_hex()?;
     {
         let trans = conn.transaction()?;
         let upload = models::Upload::find(&trans, &delete_key.uuid)?;
@@ -271,8 +275,8 @@ struct DownloadKeyAccessPost {
 impl DownloadKeyAccessPost {
     fn decode_hex(&self) -> Result<DownloadKeyAccess> {
         Ok(DownloadKeyAccess{
-            uuid: Uuid::from_str(&self.key)?,
-            access_password: Vec::from_hex(&self.access_password)?,
+            uuid: Uuid::from_str(&self.key).map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?,
+            access_password: Vec::from_hex(&self.access_password).map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?,
         })
     }
 }
@@ -290,8 +294,7 @@ struct DownloadKeyAccess {
 pub fn api_download_init(request: &Request, conn: db::DbConn) -> Result<Response> {
     let now = Utc::now();
     let download_key = request.parse_json_body::<DownloadKeyAccessPost>()?;
-    let download_key = download_key.decode_hex()
-        .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
+    let download_key = download_key.decode_hex()?;
 
     let (upload, init_download_content, init_download_confirm) = {
         let trans = conn.transaction()?;
@@ -334,8 +337,7 @@ pub fn api_download_init(request: &Request, conn: db::DbConn) -> Result<Response
 pub fn api_download(request: &Request, conn: db::DbConn) -> Result<Response> {
     let now = Utc::now();
     let download_key = request.parse_json_body::<DownloadKeyAccessPost>()?;
-    let download_key = download_key.decode_hex()
-        .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
+    let download_key = download_key.decode_hex()?;
     let upload = {
         let trans = conn.transaction()?;
         let init_download = models::InitDownload::find(&trans, &download_key.uuid, models::DownloadType::Content)?;
@@ -374,9 +376,11 @@ struct DownloadKeyHash {
 /// Upload identifier and a matching hash of the decrypted content are required
 pub fn api_download_confirm(request: &Request, conn: db::DbConn) -> Result<Response> {
     let download_key = request.parse_json_body::<DownloadKeyHash>()?;
+    let hash_bytes = Vec::from_hex(&download_key.hash)
+        .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
     let uuid_bytes = Vec::from_hex(&download_key.key)?;
-    let hash_bytes = Vec::from_hex(&download_key.hash)?;
-    let uuid = Uuid::from_bytes(&uuid_bytes)?;
+    let uuid = Uuid::from_bytes(&uuid_bytes)
+        .map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?;
     let upload = {
         let trans = conn.transaction()?;
         let init_download = models::InitDownload::find(&*conn, &uuid, models::DownloadType::Confirm)?;

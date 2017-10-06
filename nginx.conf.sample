@@ -71,7 +71,20 @@ server {
     add_header X-Content-Type-Options nosniff;
     #add_header Content-Security-Policy "default-src https:";
 
-    client_max_body_size 200m;
+    # When `proxy_request_buffering on`, nginx will read the whole request to disk
+    # before sending the request to the proxied server. A 413, too-large response
+    # will be sent for requests larger than `client_max_body_size`
+    #client_max_body_size 200m;
+    #
+    # When `proxy_request_buffering off`, nginx will proxy incoming request data as it comes in
+    # without saving it to an intermediate file. When enabled, be sure to set `client_max_body_size`
+    # and increase `upload_timeout_secs` in `config.ron` since the request will be delayed in
+    # getting to the app server.
+    proxy_request_buffering off;
+    #
+    # When `proxy_buffering off`, nginx will send proxied response data as it comes in instead of
+    # reading the entire response to an intermediate file.
+    proxy_buffering off
 
     # OCSP Stapling ---
     # fetch OCSP records from URL in ssl_certificate and cache them
