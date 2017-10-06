@@ -1,5 +1,5 @@
 (
-    app_version: "0.2.1",
+    app_version: "0.3.0",
 
     // max bytes of a single upload
     // NOTE: be sure to update `client_max_body_size` in your nginx config
