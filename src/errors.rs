@@ -20,7 +20,7 @@ error_chain! {
         ParseInt(std::num::ParseIntError);
         Json(serde_json::Error);
         Uuid(uuid::ParseError);
-        Hex(hex::FromHexError);
+        InvalidHex(hex::FromHexError);
         Postgres(postgres::error::Error);
         RingUnspecified(ring::error::Unspecified);
         MigrantLib(migrant_lib::Error);
