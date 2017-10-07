@@ -14,9 +14,6 @@ use models;
 use errors::*;
 
 
-const SWEEP_TIMEOUT_SECS: u64 = 60;
-
-
 /// Cleanup `init_upload` table, deleting expired items
 fn sweep_init_upload(conn: &postgres::Connection) -> Result<i64> {
     models::InitUpload::clear_outdated(conn)
@@ -73,7 +70,7 @@ pub fn db_sweeper() {
                 }
             }
         }
-        thread::sleep(Duration::from_secs(SWEEP_TIMEOUT_SECS));
+        thread::sleep(Duration::from_secs(models::CONFIG.expired_cleanup_interval_secs));
     }
 }
 
