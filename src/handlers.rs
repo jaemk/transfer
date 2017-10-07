@@ -172,6 +172,8 @@ pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> 
     };
 
     // In case they lied about the upload size...
+    // Note: when living behind a proxy, nginx will deal with rejecting
+    //       requests larger than `client_max_body_size`
     let mut byte_count = 0;
     let mut file = fs::File::create(&upload.file_path)?;
     let mut stream = io::BufReader::new(request.data().expect("body already read"));

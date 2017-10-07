@@ -34,7 +34,26 @@ def cmd(*args, **kwargs):
         raise CmdError(cmd_s, proc.returncode)
 
 
+def get_input(prompt):
+    try:
+        return raw_input(prompt)
+    except NameError:
+        return input(prompt)
+
+
+def confirm(msg):
+    resp = get_input(msg).strip().lower()
+    if resp and resp != 'y':
+        return False
+    return True
+
+
 def run(version=None, no_migrate=False):
+    ok = confirm("Deploy transfer [ver: {}, no-migrate: {}]? [Y/n] ".format(version if version is not None else 'master', no_migrate))
+    if not ok:
+        print("Exiting...")
+        return
+
     proj_cmd = lambda *args: cmd(*args, cwd=PROJDIR)
     print("** Updating project files **")
 
