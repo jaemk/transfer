@@ -22,4 +22,7 @@
 
     // default maximum download count for uploaded items
     // download_limit_default: Some(5),
+
+    // interval between cleanup of expired items (upload, init_upload, init_download)
+    expired_cleanup_interval_secs: 120,
 )
