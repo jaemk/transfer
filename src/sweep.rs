@@ -14,7 +14,7 @@ use models;
 use errors::*;
 
 
-const SWEEP_TIMEOUT_SECS: u64 = 60;
+const SWEEP_TIMEOUT_SECS: u64 = 120;
 
 
 /// Cleanup `init_upload` table, deleting expired items

@@ -1,14 +1,15 @@
 (
-    app_version: "0.3.1",
+    app_version: "0.3.2",
 
     // max bytes of a single upload
     // NOTE: be sure to update `client_max_body_size` in your nginx config
     upload_limit_bytes: 200000000,      // 200mb
 
     // maximum timeout between initializing an upload and uploading bytes
-    // NOTE: this will likely need to be increased if nginx is configured
-    //       with `proxy_request_buffering on`
-    upload_timeout_secs: 30,
+    // NOTE: when `proxy_request_buffering on` this needs to be large enough to
+    //       accommodate the timeout caused by nginx saving the entire request
+    //       to disk before proxying to the app server.
+    upload_timeout_secs: 500,
 
     // default lifespan of an upload in seconds
     upload_lifespan_secs_default: 86400,        // 1 day
@@ -17,7 +18,7 @@
     max_combined_upload_bytes: 5000000000,     // 5gb
 
     // maximum timeout between initializing a download and downloading bytes
-    download_timeout_secs: 120,
+    download_timeout_secs: 500,
 
     // default maximum download count for uploaded items
     // download_limit_default: Some(5),
