@@ -117,13 +117,13 @@ fn route_request(request: &rouille::Request, db_pool: db::Pool) -> Result<rouill
         (POST)  (/api/bye)      => { json!({"message": "bye!"}).to_resp()? },
 
         (GET)   (/api/upload/defaults)  => { handlers::api_upload_defaults(request)? },
-        (POST)  (/api/upload/init)      => { handlers::api_upload_init(request, db_pool.get()?)? },
-        (POST)  (/api/upload)           => { handlers::api_upload_file(request, db_pool.get()?)? },
-        (POST)  (/api/upload/delete)    => { handlers::api_upload_delete(request, db_pool.get()?)? },
+        (POST)  (/api/upload/init)      => { handlers::api_upload_init(request, &db_pool)? },
+        (POST)  (/api/upload)           => { handlers::api_upload_file(request, &db_pool)? },
+        (POST)  (/api/upload/delete)    => { handlers::api_upload_delete(request, &db_pool)? },
 
-        (POST)  (/api/download/init)    => { handlers::api_download_init(request, db_pool.get()?)? },
-        (POST)  (/api/download)         => { handlers::api_download(request, db_pool.get()?)? },
-        (POST)  (/api/download/confirm) => { handlers::api_download_confirm(request, db_pool.get()?)? },
+        (POST)  (/api/download/init)    => { handlers::api_download_init(request, &db_pool)? },
+        (POST)  (/api/download)         => { handlers::api_download(request, &db_pool)? },
+        (POST)  (/api/download/confirm) => { handlers::api_download_confirm(request, &db_pool)? },
 
         _ => {
             // static files
