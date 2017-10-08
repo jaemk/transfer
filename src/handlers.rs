@@ -91,7 +91,7 @@ struct UploadInit {
 /// e.g.)
 ///   format!("{}/api/upload?key={}", "http://localhost:3000", "...long-key...")
 ///
-pub fn api_upload_init(request: &Request, conn: db::DbConn) -> Result<Response> {
+pub fn api_upload_init(request: &Request, pool: &db::Pool) -> Result<Response> {
     let info = request.parse_json_body::<UploadInitPost>()?;
     let info = info.decode_hex()
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
@@ -102,7 +102,10 @@ pub fn api_upload_init(request: &Request, conn: db::DbConn) -> Result<Response> 
     let uuid_hex = uuid.as_bytes().to_hex();
 
     {
+        let conn = pool.get()?;
         let trans = conn.transaction()?;
+        trans.set_commit();
+
         if ! models::Status::can_fit(&trans, info.size)? {
             bail_fmt!(ErrorKind::OutOfSpace, "Server out of storage space");
         }
@@ -126,7 +129,6 @@ pub fn api_upload_init(request: &Request, conn: db::DbConn) -> Result<Response> 
             expire_date: info.expire_date,
         };
         new_init_upload.insert(&trans)?;
-        trans.commit()?;
     }
 
     let resp = json!({"key": &uuid_hex}).to_resp()?;
@@ -147,14 +149,17 @@ struct UploadKey{
 ///     - Make sure the server has enough space available (using the previously reported file size).
 ///     - Make sure the upload came within the upload time-out
 ///     - While reading the uploaded bytes, keep count and make sure the number of bytes <= state size
-pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> {
+pub fn api_upload_file(request: &Request, pool: &db::Pool) -> Result<Response> {
     let upload_key = request.parse_query_params::<UploadKey>()?;
     let upload = {
         let now = Utc::now();
         let uuid = Uuid::from_str(&upload_key.key)
             .map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?;
 
+        let conn = pool.get()?;
         let trans = conn.transaction()?;
+        trans.set_commit();
+
         let init_upload = models::InitUpload::find(&trans, &uuid)?;
         if ! models::Status::can_fit(&trans, init_upload.size)? {
             bail_fmt!(ErrorKind::OutOfSpace, "Server out of storage space");
@@ -167,7 +172,6 @@ pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> 
         }
         let new_upload = init_upload.into_upload(&file_path)?;
         let upload = new_upload.insert(&trans)?;
-        trans.commit()?;
         upload
     };
 
@@ -191,7 +195,10 @@ pub fn api_upload_file(request: &Request, conn: db::DbConn) -> Result<Response> 
         if byte_count > stated_upload_size {
             error!("Upload larger than previously stated");
             // delete the entry we just made
-            upload.delete(&*conn)?;
+            {
+                let conn = pool.get()?;
+                upload.delete(&*conn)?;
+            }
             // if the file deletion fails, the file will eventually be cleaned up
             // by the `admin sweep-files` command
             fs::remove_file(&upload.file_path).ok();
@@ -238,11 +245,14 @@ struct DeleteKeyAccess {
 
 /// Deletes an upload by key. Only uploads that were created with a deletion password can be deleted.
 /// Deletion password must be present.
-pub fn api_upload_delete(request: &Request, conn: db::DbConn) -> Result<Response> {
+pub fn api_upload_delete(request: &Request, pool: &db::Pool) -> Result<Response> {
     let delete_key = request.parse_json_body::<DeleteKeyAccessPost>()?;
     let delete_key = delete_key.decode_hex()?;
     {
+        let conn = pool.get()?;
         let trans = conn.transaction()?;
+        trans.set_commit();
+
         let upload = models::Upload::find(&trans, &delete_key.uuid)?;
         let deletion_auth = upload.get_deletion_auth(&trans)?;
         match deletion_auth {
@@ -262,7 +272,6 @@ pub fn api_upload_delete(request: &Request, conn: db::DbConn) -> Result<Response
                 }
             }
         }
-        trans.commit()?;
     }
     Ok(json!({"ok": "ok"}).to_resp()?)
 }
@@ -293,13 +302,16 @@ struct DownloadKeyAccess {
 ///
 /// Using a key and access-password, obtain the download meta-data (stuff
 /// needed for decryption).
-pub fn api_download_init(request: &Request, conn: db::DbConn) -> Result<Response> {
+pub fn api_download_init(request: &Request, pool: &db::Pool) -> Result<Response> {
     let now = Utc::now();
     let download_key = request.parse_json_body::<DownloadKeyAccessPost>()?;
     let download_key = download_key.decode_hex()?;
 
     let (upload, init_download_content, init_download_confirm) = {
+        let conn = pool.get()?;
         let trans = conn.transaction()?;
+        trans.set_commit();
+
         let upload = models::Upload::find(&trans, &download_key.uuid)?;
         let access_auth = upload.get_access_auth(&trans)?;
         access_auth.verify(&download_key.access_password)?;
@@ -322,7 +334,6 @@ pub fn api_download_init(request: &Request, conn: db::DbConn) -> Result<Response
             usage: String::from("confirm"),
             upload: upload.id,
         }.insert(&trans)?;
-        trans.commit()?;
         (upload, init_download_content, init_download_confirm)
     };
     let resp = json!({
@@ -336,12 +347,15 @@ pub fn api_download_init(request: &Request, conn: db::DbConn) -> Result<Response
 
 
 /// Download encrypted bytes
-pub fn api_download(request: &Request, conn: db::DbConn) -> Result<Response> {
+pub fn api_download(request: &Request, pool: &db::Pool) -> Result<Response> {
     let now = Utc::now();
     let download_key = request.parse_json_body::<DownloadKeyAccessPost>()?;
     let download_key = download_key.decode_hex()?;
     let upload = {
+        let conn = pool.get()?;
         let trans = conn.transaction()?;
+        trans.set_commit();
+
         let init_download = models::InitDownload::find(&trans, &download_key.uuid, models::DownloadType::Content)?;
         let upload = init_download.get_upload(&trans)?;
         let access_auth = upload.get_access_auth(&trans)?;
@@ -358,7 +372,6 @@ pub fn api_download(request: &Request, conn: db::DbConn) -> Result<Response> {
         let new_download = models::NewDownload { upload: upload.id };
         new_download.insert(&trans)?;
         init_download.delete(&trans)?;
-        trans.commit()?;
         upload
     };
     serve_file("application/octet-stream", upload.file_path)
@@ -376,7 +389,7 @@ struct DownloadKeyHash {
 /// Obtain the decrypted file's name
 ///
 /// Upload identifier and a matching hash of the decrypted content are required
-pub fn api_download_confirm(request: &Request, conn: db::DbConn) -> Result<Response> {
+pub fn api_download_confirm(request: &Request, pool: &db::Pool) -> Result<Response> {
     let download_key = request.parse_json_body::<DownloadKeyHash>()?;
     let hash_bytes = Vec::from_hex(&download_key.hash)
         .map_err(|_| format_err!(ErrorKind::BadRequest, "malformed info"))?;
@@ -384,12 +397,14 @@ pub fn api_download_confirm(request: &Request, conn: db::DbConn) -> Result<Respo
     let uuid = Uuid::from_bytes(&uuid_bytes)
         .map_err(|_| format_err!(ErrorKind::DoesNotExist, "upload not found"))?;
     let upload = {
+        let conn = pool.get()?;
         let trans = conn.transaction()?;
+        trans.set_commit();
+
         let init_download = models::InitDownload::find(&*conn, &uuid, models::DownloadType::Confirm)?;
         let upload = init_download.get_upload(&trans)?;
         auth::eq(&hash_bytes, &upload.content_hash)?;
         init_download.delete(&trans)?;
-        trans.commit()?;
         upload
     };
     Ok(json!({"file_name": &upload.file_name}).to_resp()?)
