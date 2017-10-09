@@ -3,7 +3,7 @@ Service initialization
 */
 use std::env;
 use std::thread;
-use std::io;
+use std::time;
 
 use env_logger;
 use chrono::Local;
@@ -63,45 +63,49 @@ pub fn start(host: &str, port: u16) -> Result<()> {
 
     rouille::start_server(&addr, move |request| {
         let db_pool = db_pool.clone();
+        let start = time::Instant::now();
 
-        rouille::log(request, io::stdout(), move || {
-            // dispatch and handle errors
-            match route_request(request, db_pool) {
-                Ok(resp) => resp,
-                Err(e) => {
-                    use self::ErrorKind::*;
-                    error!("Handler Error: {}", e);
-                    match *e {
-                        BadRequest(ref s) => {
-                            // bad request
-                            let body = json!({"error": s});
-                            body.to_resp().unwrap().with_status_code(400)
-                        }
-                        InvalidAuth(ref s) => {
-                            // unauthorized
-                            let body = json!({"error": s});
-                            body.to_resp().unwrap().with_status_code(401)
-                        }
-                        DoesNotExist(ref s) => {
-                            // not found
-                            let body = json!({"error": s});
-                            body.to_resp().unwrap().with_status_code(404)
-                        }
-                        UploadTooLarge(ref s) => {
-                            // payload too large / request entity to large
-                            let body = json!({"error": s});
-                            body.to_resp().unwrap().with_status_code(413)
-                        }
-                        OutOfSpace(ref s) => {
-                            // service unavailable
-                            let body = json!({"error": s});
-                            body.to_resp().unwrap().with_status_code(503)
-                        }
-                        _ => rouille::Response::text("Something went wrong").with_status_code(500),
+        // dispatch and handle errors
+        let response = match route_request(request, db_pool) {
+            Ok(resp) => resp,
+            Err(e) => {
+                use self::ErrorKind::*;
+                error!("Handler Error: {}", e);
+                match *e {
+                    BadRequest(ref s) => {
+                        // bad request
+                        let body = json!({"error": s});
+                        body.to_resp().unwrap().with_status_code(400)
                     }
+                    InvalidAuth(ref s) => {
+                        // unauthorized
+                        let body = json!({"error": s});
+                        body.to_resp().unwrap().with_status_code(401)
+                    }
+                    DoesNotExist(ref s) => {
+                        // not found
+                        let body = json!({"error": s});
+                        body.to_resp().unwrap().with_status_code(404)
+                    }
+                    UploadTooLarge(ref s) => {
+                        // payload too large / request entity to large
+                        let body = json!({"error": s});
+                        body.to_resp().unwrap().with_status_code(413)
+                    }
+                    OutOfSpace(ref s) => {
+                        // service unavailable
+                        let body = json!({"error": s});
+                        body.to_resp().unwrap().with_status_code(503)
+                    }
+                    _ => rouille::Response::text("Something went wrong").with_status_code(500),
                 }
             }
-        })
+        };
+
+        let elapsed = start.elapsed();
+        let elapsed = (elapsed.as_secs() * 1_000) as f32 + (elapsed.subsec_nanos() as f32 / 1_000_000.);
+        info!("[{}] {} {:?} {}ms", request.method(), response.status_code, request.url(), elapsed);
+        response
     });
 }
 
