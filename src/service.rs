@@ -3,7 +3,7 @@ Service initialization
 */
 use std::env;
 use std::thread;
-use std::io;
+use std::time;
 
 use env_logger;
 use chrono::Local;
@@ -64,7 +64,17 @@ pub fn start(host: &str, port: u16) -> Result<()> {
     rouille::start_server(&addr, move |request| {
         let db_pool = db_pool.clone();
 
-        rouille::log(request, io::stdout(), move || {
+        let now = Local::now().format("%Y-%m-%d %H:%M%S");
+        let log_ok = |req: &rouille::Request, resp: &rouille::Response, elap: time::Duration| {
+            let ms = (elap.as_secs() * 1_000) as f32 + (elap.subsec_nanos() as f32 / 1_000_000.);
+            info!("[{}] {} {} -> {} ({}ms)", now, req.method(), req.raw_url(), resp.status_code, ms)
+        };
+        let log_err = |req: &rouille::Request, elap: time::Duration| {
+            let ms = (elap.as_secs() * 1_000) as f32 + (elap.subsec_nanos() as f32 / 1_000_000.);
+            info!("[{}] Handler Panicked: {} {} ({}ms)", now, req.method(), req.raw_url(), ms)
+        };
+        // dispatch and handle errors
+        rouille::log_custom(request, log_ok, log_err, move || {
             // dispatch and handle errors
             match route_request(request, db_pool) {
                 Ok(resp) => resp,
