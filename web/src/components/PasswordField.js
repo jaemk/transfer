@@ -19,6 +19,8 @@ class PasswordField extends Component {
 
   validate() {
     const field1 = this.state.access;
+    if (field1 && this.props.no_confirm) { return 'success'; }
+
     const field2 = this.state.confirm;
     if (field1 && field2) {
       return (field1 === field2)? 'success' : 'error';
@@ -33,6 +35,10 @@ class PasswordField extends Component {
       params[field] = val;
       this.setState(params);
 
+      if (this.props.no_confirm) {
+        this.props.update(val);
+        return
+      }
       const updateVal = (val === otherVal)? val : '';
       this.props.update(updateVal);
     }
@@ -52,13 +58,16 @@ class PasswordField extends Component {
             disabled={this.props.disabled}
           />
           {' '}
-          <FormControl
-            type="password"
-            value={this.state.confirm}
-            placeholder={this.props.title + "Password Confirm"}
-            onChange={(e) => update(e, 'confirm', this.state.pass)}
-            disabled={this.props.disabled}
-          />
+          {
+            this.props.no_confirm? ' ' :
+              <FormControl
+                type="password"
+                value={this.state.confirm}
+                placeholder={this.props.title + "Password Confirm"}
+                onChange={(e) => update(e, 'confirm', this.state.pass)}
+                disabled={this.props.disabled}
+              />
+          }
           <FormControl.Feedback />
         </FormGroup>
         {

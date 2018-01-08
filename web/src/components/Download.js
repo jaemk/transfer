@@ -159,6 +159,7 @@ class Download extends Component {
           <br/>
 
           <PasswordField
+            no_confirm={true}
             title="Access"
             disabled={disable}
             update={(v) => this.setState({accessPass: v})}
@@ -167,6 +168,7 @@ class Download extends Component {
           <br/>
 
           <PasswordField
+            no_confirm={true}
             title="Decrypt"
             disabled={disable}
             update={(v) => this.setState({encryptPass: v})}
