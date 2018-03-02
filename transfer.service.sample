@@ -14,6 +14,7 @@ Requires=postgresql.service
 After=postgresql.service
 
 [Service]
+User=<running_user>
 WorkingDirectory=/<PATH_TO_PROJ_DIR>/transfer
 ExecStart=/<PATH_TO_EXEC>/transfer serve --port <PORT>
 Restart=on-failure
