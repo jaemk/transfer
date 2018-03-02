@@ -28,13 +28,10 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
         - Open `http://localhost:3000`
         - Api requests are proxied to the backend: `localhost:3002`
 
-Note: This project uses the `GitFlow` branching model, all pr's should be made to `develop`.
-
 
 ## Release Builds
 
-To allow simple deployments, production/release artifacts are compiled and checked-in with tagged `releases` and `hotfixes`.
-Both the backend (`rust`) and frontend (`react.js`) must be (re)compiled (only when code changes) for tagged commits (`releases` and `hotfixes`)
+Packaged releases are built and packaged by travis-ci. Complete packaged releases are available [here](https://github.com/jaemk/transfer/releases)
 
 - Backend (`Rust` setup for cross-compilation)
     - Install [`docker`](https://www.digitalocean.com/community/tutorials/how-to-install-and-use-docker-on-ubuntu-16-04)
@@ -50,7 +47,6 @@ Both the backend (`rust`) and frontend (`react.js`) must be (re)compiled (only w
         - `build.py web`
 
 
-
 ## Deployment
 
 > `postgres` & `nginx` are required
@@ -58,7 +54,7 @@ Both the backend (`rust`) and frontend (`react.js`) must be (re)compiled (only w
 Note, the `master` branch is the release channel. All releases are tagged to allow easily jumping between versions.
 
 - Initial
-    - Clone this repo
+    - Download and unpackage the latest release
     - `bin/x86_64/transfer admin database setup`
         - Run suggested commands to create database if it doesn't exist
         - Run `admin database setup` again
@@ -69,11 +65,7 @@ Note, the `master` branch is the release channel. All releases are tagged to all
     - `systemctl restart nginx`
     - `systemctl restart transfer`
 - Updates
-    - `git pull --rebase=false`
+    - Grab the latest release and replace the complete app
     - `bin/x86_64/transfer admin database migrate`
     - `systemctl restart transfer`
-- Selecting a specific version
-    - `git fetch --all --tags`
-    - `git checkout <tag>`
-    - back to latest: `git checkout master`
 
