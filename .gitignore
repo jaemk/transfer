@@ -6,4 +6,7 @@ uploads/*
 !uploads/.gitkeep
 
 assets/static/acme_challenge
+assets/static/js/*.js
+assets/static/css/*.css
+assets/static/media/*
 

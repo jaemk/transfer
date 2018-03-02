@@ -57,6 +57,9 @@ matrix:
 before_install:
   - set -e
   - rustup self update
+  - curl -o- -L https://yarnpkg.com/install.sh | bash -s -- --version 1.3.2
+  - export PATH=$HOME/.yarn/bin:$PATH
+  - npm install -g react-scripts
 
 install:
   - sh ci/install.sh
@@ -70,24 +73,24 @@ after_script: set +e
 before_deploy:
   - sh ci/before_deploy.sh
 
-#deploy:
-#  # TODO update `api_key.secure`
-#  # - Create a `public_repo` GitHub token. Go to: https://github.com/settings/tokens/new
-#  # - Encrypt it: `travis encrypt 0123456789012345678901234567890123456789
-#  # - Paste the output down here
-#  api_key:
-#    secure: "1xsGJfszjfSRM/TfZZbFZITS2BMuazHhhSKYvyBvHhKjEFMdzmc0FEtkPbm0TsdABHdYr7dyQ4i4SEHGu3wHI1RXuMfRgyp4LxRrq1UKafHslNkvOd7a27K9DgkNJvTD3j3dB56uTRJc8H5ttLlb4STmd1kAF8AbJB3paIMem27VZd4/l8r27NGE+j4d5/CJ00nPXI52CMPZHWtKpFMD0L6lVVq8zKg0X2njAbIXSyHW9KgkSS+HjrAFsL8MmDKfE/mk/UCyYz+sPp+nAs9/PQx83V5NnC25u7X4cZFWkq6mQniQWk35RQqXBK6JUYTv87fLRqs88u0AUMecEJLHLudwZ6bn5/V7E9r6ANdAvq5fK/fL9AZGJudeomv6SOciJkXcD/uR2s6cM3S09YoHVBltliTBYFaQijhfRpoljyvykKG8PCzPGE/D26NH0/hRhbaEglhVvg0rgucqsVzr5g6Q5O3B9mJUF7QlGcqR2Rv5MupnMEpQ4t9D0ENQ59wPlSPMfofatSTkjt8qZYBt8hwNbqlfiyNB1PWGibAPb6oF22uIbdDn2X6cIBMEV/XV7uGX5eufGg8kCOJnZY7xAQFhvbOHRXFc8vqp9B8VornYbfo51u5XkLdZBJ0CiKJKzmlHZGyRUmvmu6S3PrtXDNkmS076xGNoByVTVbPsVDc="
-#  file_glob: true
-#  file: $CRATE_NAME-$TRAVIS_TAG-$TARGET.*
-#  on:
-#    # TODO Here you can pick which targets will generate binary releases
-#    # In this example, there are some targets that are tested using the stable
-#    # and nightly channels. This condition makes sure there is only one release
-#    # for such targets and that's generated using the stable channel
-#    condition: $TRAVIS_RUST_VERSION = stable
-#    tags: true
-#  provider: releases
-#  skip_cleanup: true
+deploy:
+  # TODO update `api_key.secure`
+  # - Create a `public_repo` GitHub token. Go to: https://github.com/settings/tokens/new
+  # - Encrypt it: `travis encrypt 0123456789012345678901234567890123456789
+  # - Paste the output down here
+  api_key:
+    secure: "IbUCa1Qaz73T+yXsM7hXEjy/j1XnYmnsTKsPgaZ/tr7sj8HSBYGcXutv0wDH9c+UEb4fR7h2HuVJhEZIFP2mE+xUkWtGTMnxkIXRlxDv17eS3QDBu8tpzJrD/pRSMkMgZob5g2GAahpZeFuFPY8XC+LHHcEtmbvJDj2LxpDoNPIeJghAIDW5cL5RptK6++MG1axnTvBLg0fc7AmTD9XIc/lnGyiPcRgX9ljCRc9mYEC5/fMgnqkYXeXhw4didfihYmL9DFdqsmP98zfho8VHQjJB7CqF4/RxNhwNxtQ6k/dqYqV+e4r1p4p5nzlN1Z3LCbZE1ZcAxywx7NxQaTgrzex9EuKi4hQPKnsTOGlN2Pi8wD+UKtWMxWoblIS9F8dKG/UVg6zBmAQL19KNT6YnAUzgxnNg1ezWQr3o9oJ9RK7Fjwh3klahUs80jlN6Z1tasKGFWLwRifhVPGBUONjZb4b0tKIeblswkvPwQ7niR1ZmOp63HM6yY1b0t+jvjfGlMGVOSU5O5EaymFfvqiNsCPhrpbDwYQWJ4afEkpvMiYnp2CB3RWdUujjIBYxc5cuAOEI40FOh8ulDuBr2D9FmfYJAx+3xq/G1GnOPkcAk8n3JX/vBNwwITVuC8i+U6E1VuyxRoGk3+HEbRYSqHNRtd7JQ0AJGqVay7ywomwMgWh0="
+  file_glob: true
+  file: $CRATE_NAME-$TRAVIS_TAG-$TARGET.*
+  on:
+    # TODO Here you can pick which targets will generate binary releases
+    # In this example, there are some targets that are tested using the stable
+    # and nightly channels. This condition makes sure there is only one release
+    # for such targets and that's generated using the stable channel
+    condition: $TRAVIS_RUST_VERSION = stable
+    tags: true
+  provider: releases
+  skip_cleanup: true
 
 cache: cargo
 before_cache:

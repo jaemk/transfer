@@ -44,10 +44,8 @@ class Server(object):
     """
     artifact = "transfer"
     bin_dir = os.path.join(PROJDIR, 'bin')
-    bin_dir_32 = os.path.join(bin_dir, 'i686')
     bin_dir_64 = os.path.join(bin_dir, 'x86_64')
     targets = (
-        #("i686", 'gnu', bin_dir_32),
         ("x86_64", 'musl', bin_dir_64),
     )
 
@@ -90,6 +88,11 @@ class Web(object):
         cmd('rm', '-f', pjoin(cls.static_dir, 'css', 'main.css'))
         cmd('rm', '-f', pjoin(cls.static_dir, 'media', '*'))
         cmd('rm', '-f', pjoin(cls.static_dir, 'manifest.json'))
+
+        print("** Updating dependencies **")
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        cmd('yarn', 'install', cwd=cls.web_proj_dir)
+        print("<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<")
 
         print("** Building react release **")
         print("\n** START BUILD OUTPUT **")

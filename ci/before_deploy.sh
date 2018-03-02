@@ -17,11 +17,18 @@ main() {
 
     test -f Cargo.lock || cargo generate-lockfile
 
-    # TODO Update this to build the artifacts that matter to you
-    cross rustc --bin transfer --target $TARGET --release -- -C lto
+    # Build artifacts
+    ./build.py web
 
-    # TODO Update this to package the right artifacts
-    cp target/$TARGET/release/transfer $stage/
+    cross rustc --bin transfer --target $TARGET --release -- -C lto
+    cp target/$TARGET/release/transfer bin/
+
+    rm -rf target/
+    rm -rf web/node_modules
+    rm -rf web/build
+
+    mkdir -p $stage/transfer
+    cp -r * $stage/transfer
 
     cd $stage
     tar czf $src/$CRATE_NAME-$TRAVIS_TAG-$TARGET.tar.gz *
