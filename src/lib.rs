@@ -19,6 +19,7 @@ extern crate serde;
 #[macro_use] extern crate serde_json;
 extern crate serde_urlencoded;
 #[macro_use] extern crate rouille;
+extern crate xdg;
 
 #[macro_use] pub mod macros;
 pub mod service;
@@ -36,6 +37,13 @@ use errors::*;
 pub use models::CONFIG;
 
 pub static APPNAME: &'static str = "Transfer";
+
+
+pub fn config_dir() -> Result<std::path::PathBuf> {
+    let xdg_dirs = xdg::BaseDirectories::with_prefix("transfer")?;
+    let config_dir = xdg_dirs.create_config_directory("config")?;
+    Ok(config_dir)
+}
 
 
 // ------------------------------------------------

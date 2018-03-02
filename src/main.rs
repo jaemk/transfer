@@ -6,6 +6,7 @@ extern crate transfer;
 
 use clap::{Arg, ArgMatches, App, SubCommand};
 use migrant_lib::Config;
+use migrant_lib::config::PostgresSettingsBuilder;
 use std::env;
 
 error_chain! {
@@ -76,14 +77,22 @@ fn run() -> Result<()> {
 
 pub fn admin(matches: &ArgMatches) -> Result<()> {
     if let Some(db_matches) = matches.subcommand_matches("database") {
-        let dir = env::current_dir()?;
-        let config_path = match migrant_lib::search_for_config(&dir) {
+        let proj_dir = env::current_dir()?;
+        let config_dir = transfer::config_dir()?;
+        let config_path = match migrant_lib::search_for_settings_file(&config_dir) {
             None => {
-                Config::init_in(&dir)
-                    .for_database(Some("postgres"))?
+                Config::init_in(&config_dir)
+                    .with_postgres_options(
+                         PostgresSettingsBuilder::empty()
+                             .database_name("transfer")
+                             .database_user("transfer")
+                             .database_password("transfer")
+                             .database_host("localhost")
+                             .database_port(5432)
+                             .migration_location(proj_dir.join("migrations"))?)
                     .initialize()?;
-                match migrant_lib::search_for_config(&dir) {
-                    None => bail!("Unable to find `.migrant.toml` even though it was just saved."),
+                match migrant_lib::search_for_settings_file(&config_dir) {
+                    None => bail!("Unable to find `Migrant.toml` even though it was just saved."),
                     Some(p) => p,
                 }
             }
@@ -91,7 +100,8 @@ pub fn admin(matches: &ArgMatches) -> Result<()> {
         };
 
         // don't check database migration table since it may not be setup yet
-        let config = Config::load_file_only(&config_path)?;
+        let mut config = Config::from_settings_file(&config_path)?;
+        config.use_cli_compatible_tags(true);
 
         if db_matches.is_present("setup") {
             config.setup()?;
@@ -111,7 +121,7 @@ pub fn admin(matches: &ArgMatches) -> Result<()> {
                     .all(true)
                     .apply();
                 if let Err(ref err) = res {
-                    if let migrant_lib::Error::MigrationComplete(_) = *err {
+                    if err.is_migration_complete() {
                         println!("Database is up-to-date!");
                         return Ok(());
                     }

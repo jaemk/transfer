@@ -1,11 +1,11 @@
 /*!
 Database connection stuff
 */
-use std::env;
 use r2d2;
 use r2d2_postgres::{TlsMode, PostgresConnectionManager};
 use postgres;
 use migrant_lib;
+use {config_dir};
 
 use super::errors::*;
 
@@ -20,9 +20,11 @@ pub type DbConn = r2d2::PooledConnection<PostgresConnectionManager>;
 
 /// Try to get the current db connection string
 pub fn connect_str() -> Result<String> {
-    let dir = env::current_dir().chain_err(|| "Unable to retrieve current working dir")?;
-    let config_path = migrant_lib::search_for_config(&dir).chain_err(|| "Unable to find `migrant.toml` config file")?;
-    let config = migrant_lib::Config::load_file_only(&config_path).chain_err(|| "Failed loading `migrant.toml`")?;
+    let config_dir_ = config_dir()?;
+    let config_path = migrant_lib::search_for_settings_file(&config_dir_)
+        .chain_err(|| "Unable to find `Migrant.toml` config file")?;
+    let config = migrant_lib::Config::from_settings_file(&config_path)
+        .chain_err(|| "Failed loading `Migrant.toml`")?;
     Ok(config.connect_string().chain_err(|| "Failed creating a connection string")?)
 }
 

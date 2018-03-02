@@ -10,6 +10,7 @@ use postgres;
 use r2d2;
 use ring;
 use migrant_lib;
+use xdg;
 
 
 error_chain! {
@@ -24,6 +25,7 @@ error_chain! {
         Postgres(postgres::error::Error);
         RingUnspecified(ring::error::Unspecified);
         MigrantLib(migrant_lib::Error);
+        Xdg(xdg::BaseDirectoriesError);
     }
     errors {
         DoesNotExist(s: String) {
