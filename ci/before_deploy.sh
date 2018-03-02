@@ -21,6 +21,7 @@ main() {
     ./build.py web
 
     cross rustc --bin transfer --target $TARGET --release -- -C lto
+    mkdir -p bin
     cp target/$TARGET/release/transfer bin/
 
     rm -rf target/
