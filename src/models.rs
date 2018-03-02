@@ -25,7 +25,6 @@ lazy_static! {
 
 #[derive(Debug, Deserialize)]
 pub struct Config {
-    pub app_version: String,
     pub upload_limit_bytes: i64,
     pub upload_timeout_secs: i64,
     pub upload_lifespan_secs_default: i64,

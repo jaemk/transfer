@@ -66,7 +66,6 @@ class Server(object):
         print("** END BUILD OUTPUT **\n")
 
         print("** Release artifacts copied to {}".format(cls.bin_dir))
-        print("** Remember to tag your artifact hotfix/release commit!")
 
 
 class Web(object):
