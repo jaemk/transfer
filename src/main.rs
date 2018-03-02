@@ -41,6 +41,8 @@ fn run() -> Result<()> {
                 .help("Output debug logging info. Shortcut for setting env-var LOG=debug")))
         .subcommand(SubCommand::with_name("admin")
             .about("admin functions")
+            .subcommand(SubCommand::with_name("config-dir")
+                .about("print the xdg config directory being used"))
             .subcommand(SubCommand::with_name("database")
                 .about("database functions")
                 .subcommand(SubCommand::with_name("setup")
@@ -76,6 +78,10 @@ fn run() -> Result<()> {
 
 
 pub fn admin(matches: &ArgMatches) -> Result<()> {
+    if let Some(_) = matches.subcommand_matches("config-dir") {
+        println!("{}", transfer::config_dir()?.display());
+        return Ok(())
+    }
     if let Some(db_matches) = matches.subcommand_matches("database") {
         let proj_dir = env::current_dir()?;
         let config_dir = transfer::config_dir()?;

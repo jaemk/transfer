@@ -12,12 +12,19 @@ use ron;
 
 use auth;
 use errors::*;
+use {config_dir};
 
 
 lazy_static! {
     pub static ref CONFIG: Config = {
-        let cwd = env::current_dir().expect("current dir error");
-        let f = fs::File::open(cwd.join("config.ron")).expect("Failed opening config file");
+        let config_dir_ = config_dir().expect("Failed getting xdg config dir");
+        let f = match fs::File::open(config_dir_.join("config.ron")) {
+            Err(_) => {
+                let cwd = env::current_dir().expect("current dir error");
+                fs::File::open(cwd.join("config.ron")).expect("Failed opening config file")
+            }
+            Ok(f) => f,
+        };
         ron::de::from_reader(f).expect("Failed parsing config file")
     };
 }
