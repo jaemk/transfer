@@ -41,7 +41,7 @@ pub static APPNAME: &'static str = "Transfer";
 
 pub fn config_dir() -> Result<std::path::PathBuf> {
     let xdg_dirs = xdg::BaseDirectories::with_prefix("transfer")?;
-    let config_dir = xdg_dirs.create_config_directory("config")?;
+    let config_dir = xdg_dirs.create_config_directory("")?;
     Ok(config_dir)
 }
 
