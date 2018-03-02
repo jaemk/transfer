@@ -3,7 +3,7 @@
 
     // max bytes of a single upload
     // NOTE: be sure to update `client_max_body_size` in your nginx config
-    upload_limit_bytes: 200000000,      // 200mb
+    upload_limit_bytes: 200000000,
 
     // maximum timeout between initializing an upload and uploading bytes
     // NOTE: when `proxy_request_buffering on` this needs to be large enough to
@@ -15,7 +15,7 @@
     upload_lifespan_secs_default: 86400,        // 1 day
 
     // max limit of uploaded bytes
-    max_combined_upload_bytes: 5000000000,     // 5gb
+    max_combined_upload_bytes: 5000000000,
 
     // maximum timeout between initializing a download and downloading bytes
     download_timeout_secs: 500,
