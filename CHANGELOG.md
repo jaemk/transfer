@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.1]
+### Added
+- Release script for downloaded, unpacking, and symlinking
+  the latest packaged release
+
+### Changed
+- Fixed password field validation
+- Update readme with detailed deployment directions
+
+### Removed
+- deploy script
+
+
 ## [0.4.0]
 ### Added
 
