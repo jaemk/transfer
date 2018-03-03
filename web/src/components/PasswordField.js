@@ -18,7 +18,7 @@ class PasswordField extends Component {
   }
 
   validate() {
-    const field1 = this.state.access;
+    const field1 = this.state.pass;
     if (field1 && this.props.no_confirm) { return 'success'; }
 
     const field2 = this.state.confirm;
@@ -39,8 +39,9 @@ class PasswordField extends Component {
         this.props.update(val);
         return
       }
-      const updateVal = (val === otherVal)? val : '';
-      this.props.update(updateVal);
+      const valid = val === otherVal;
+      const updateVal = valid? val : '';
+      this.props.update(updateVal, valid);
     }
 
     return (

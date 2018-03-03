@@ -35,7 +35,6 @@ class Delete extends Component {
   }
 
   delete() {
-    console.log(this.state);
     let required = {};
     if (this.state.key.length === 0) {
       required.key = true;
@@ -60,7 +59,7 @@ class Delete extends Component {
         responseStatus: resp.status,
       });
     }).catch(err => {
-      console.log(err);
+      console.error(err);
       this.setState({responseStatus: err.response.status})
     });
   }

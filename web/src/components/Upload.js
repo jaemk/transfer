@@ -15,9 +15,11 @@ class Upload extends Component {
     super(props);
     this.state = {
       accessPass: '',
+      accessValid: false,
       encryptPass: '',
+      encryptValid: false,
       deletePass: '',
-      deletePassConfirm: '',
+      deleteValid: true,
       downloadLimit: '',
       lifespan: '',
 
@@ -50,11 +52,14 @@ class Upload extends Component {
     if (!file) {
       required.file = true;
     }
-    if (this.state.accessPass.length === 0) {
+    if (this.state.accessPass.length === 0 || !this.state.accessValid) {
       required.accessPass = true;
     }
-    if (this.state.encryptPass.length === 0) {
+    if (this.state.encryptPass.length === 0 || !this.state.encryptValid) {
       required.encryptPass = true;
+    }
+    if (!this.state.deleteValid) {
+      required.deletePass = true;
     }
 
     let errors = {};
@@ -194,7 +199,7 @@ class Upload extends Component {
           <PasswordField
             title="Access"
             disabled={disable}
-            update={(v) => this.setState({accessPass: v})}
+            update={(v, valid) => this.setState({accessPass: v, accessValid: valid})}
             required={this.state.required.accessPass}
           />
           <br/>
@@ -202,7 +207,7 @@ class Upload extends Component {
           <PasswordField
             title="Encrypt"
             disabled={disable}
-            update={(v) => this.setState({encryptPass: v})}
+            update={(v, valid) => this.setState({encryptPass: v, encryptValid: valid})}
             required={this.state.required.encryptPass}
           />
           <br/>
@@ -210,7 +215,8 @@ class Upload extends Component {
           <PasswordField
             title="Delete"
             disabled={disable}
-            update={(v) => this.setState({deletePass: v})}
+            update={(v, valid) => this.setState({deletePass: v, deleteValid: valid})}
+            required={this.state.required.deletePass}
           />
           <br/>
 

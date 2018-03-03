@@ -28,12 +28,10 @@ class NavBar extends Component {
   }
 
   mapUrlToNavKey(url) {
-    console.log('url:', url);
     return URL_TO_INDEX[url];
   }
 
   handleSelect(eventKey) {
-    console.log('eventkey:', eventKey);
     const url = INDEX_TO_URL[eventKey] || '/upload';
     this.props.history.push(url);
   }
@@ -41,7 +39,6 @@ class NavBar extends Component {
   render() {
     const activeKey = this.mapUrlToNavKey(this.props.history.location.pathname);
     const isDisabled = (eventKey) => activeKey === eventKey;
-    console.log('activekey:', activeKey);
     return (
       <div>
         <Nav bsStyle="tabs" activeKey={activeKey} onSelect={this.handleSelect}>
