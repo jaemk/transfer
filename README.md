@@ -24,6 +24,7 @@ Also see the command line client, [`transfer-cli`](https://github.com/jaemk/tran
     - Install [`npm`](https://www.npmjs.com/get-npm)
     - Install [`yarn`](https://yarnpkg.com/en/docs/install)
     - Build a run frontend dev server
+        - `yarn install`
         - `yarn start`
         - Open `http://localhost:3000`
         - Api requests are proxied to the backend: `localhost:3002`
@@ -47,25 +48,75 @@ Packaged releases are built and packaged by travis-ci. Complete packaged release
         - `build.py web`
 
 
-## Deployment
+## Deployment / Running Packaged Releases
 
 > `postgres` & `nginx` are required
 
-Note, the `master` branch is the release channel. All releases are tagged to allow easily jumping between versions.
-
-- Initial
-    - Download and unpackage the latest release
-    - `bin/x86_64/transfer admin database setup`
-        - Run suggested commands to create database if it doesn't exist
-        - Run `admin database setup` again
-    - Make sure migrations are up to date: `bin/x86_64/transfer admin database migrate`
-    - Poke around if you want: `bin/x86_64/transfer admin database shell`
-    - Copy `nginx.conf.sample` to `/etc/nginx/sites-available/transfer` and update details
-    - Copy `transfer.service.sample` to `/etc/lib/systemd/system/transfer.service` and update details
-    - `systemctl restart nginx`
-    - `systemctl restart transfer`
-- Updates
-    - Grab the latest release and replace the complete app
-    - `bin/x86_64/transfer admin database migrate`
-    - `systemctl restart transfer`
-
+- **Initial Setup**
+    - Create and enter a project directory where versioned packages can be managed:
+      ```bash
+      mkdir transfer
+      cd transfer
+      ```
+    - Download, unpackage, and do initial setup for the latest release
+      (see [releases](https://github.com/jaemk/transfer/releases))
+       ```bash
+       # download
+       curl -LO https://github.com/jaemk/transfer/releases/download/$TAG/transfer-$TAG-$TARGET.tar.gz
+       # extract
+       tar -xf transfer-$TAG-$TARGET.tar.gz
+       # rename
+       mv transfer $TAG
+       # setup "latest" symlink
+       ln -sfn $TAG latest
+       ```
+    - Setup the database
+      ```bash
+      latest/bin/transfer admin database setup
+      # Run suggested commands to create database if it doesn't exist
+      # and then try settinng up migrations again
+      latest/bin/transfer admin database setup
+      ```
+    - Apply migrations
+      ```bash
+      latest/bin/transfer admin database migrate
+      ```
+    - Poke around the database
+      ```bash
+      bin/x86_64/transfer admin database shell
+      ```
+    - Setup nginx
+      ```bash
+      # copy sample config and then update its details with your environment info
+      sudo cp nginx.conf.sample /etc/nginx/sites-available/transfer
+      # check config
+      sudo nginx -t
+      # enable site
+      sudo ln -s /etc/nginx/sites-enabled/transfer /etc/nginx/sites-avaialble/transfer
+      sudo systemctl restart nginx
+      ```
+    - Setup systemd service
+      ```bash
+      # copy sample config and then update its details with your environment info
+      sudo cp transfer.service.sample /lib/systemd/system/transfer.service
+      # enable the service
+      sudo systemctl daemon-reload
+      sudo systemctl enable transfer.service
+      # start!
+      sudo systemctl restart transfer
+      # tail the log
+      sudo journalctl -fu transfer
+      ```
+- **Updates**
+    - Assuming you followed the "Initial Setup" section
+    - Use the `release.py` script to fetch, unpackage, and symlink the latest release
+      ```bash
+      # from the `transfer` project root
+      # follow prompts to download the appropriate target and replace the `latest` symlink
+      latest/release.py fetch
+      ```
+    - Apply migrations and restart the app
+      ```bash
+      bin/x86_64/transfer admin database migrate
+      systemctl restart transfer
+      ```
