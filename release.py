@@ -207,7 +207,7 @@ def fetch_latest():
     if confirm and confirm.strip().lower() != 'y':
         print("Exiting...")
         return
-    cmd('ln', '-s', tag, 'latest')
+    cmd('ln', '-sfn', tag, 'latest')
 
 
 def run(args):
