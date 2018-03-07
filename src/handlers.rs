@@ -374,7 +374,16 @@ pub fn api_download(request: &Request, pool: &db::Pool) -> Result<Response> {
         init_download.delete(&trans)?;
         upload
     };
-    serve_file("application/octet-stream", upload.file_path)
+    if request.header("x-proxy-nginx").unwrap_or("") == "true" {
+        let upload_path = format!("/private/{}", upload.uuid.as_bytes().to_hex());
+        let resp = Response::empty_400()
+            .with_status_code(200)
+            .with_additional_header("x-accel-redirect", upload_path)
+            .with_additional_header("content-type", "application/octet-stream");
+        Ok(resp)
+    } else {
+        serve_file("application/octet-stream", upload.file_path)
+    }
 }
 
 
