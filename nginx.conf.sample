@@ -30,8 +30,18 @@ server {
     #     alias /<PATH_TO_PROJ_BASE>/assets/static/;
     # }
     #
+    # # The following provides support for using `X-Accel-Redirect` in application code.
+    # # The application can return a response containing the header `X-Accel-Redirect: /private/<update-id>`
+    # # and let nginx handle sending the file directly instead of shuffling the bytes
+    # # out of the application.
+    # location /private/ {
+    #     internal;
+    #     alias /<PATH_TO_PROJ_ROOT>/uploads;
+    # }
+    #
     # location / {
     #     include proxy_params;
+    #     proxy_set_header X-Proxy-Nginx true;
     #     proxy_pass http://localhost:<PORT>/;
     # }
 }
@@ -114,6 +124,7 @@ server {
 
     location / {
         include proxy_params;
+        proxy_set_header X-Proxy-Nginx true;
         proxy_pass http://localhost:<PORT>/;
     }
 }
