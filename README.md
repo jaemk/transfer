@@ -92,7 +92,7 @@ Packaged releases are built and packaged by travis-ci. Complete packaged release
       # check config
       sudo nginx -t
       # enable site
-      sudo ln -s /etc/nginx/sites-enabled/transfer /etc/nginx/sites-avaialble/transfer
+      sudo ln -s /etc/nginx/sites-available/transfer /etc/nginx/sites-enabled/transfer
       sudo systemctl restart nginx
       ```
     - Setup systemd service
