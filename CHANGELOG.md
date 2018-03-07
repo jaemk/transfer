@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.2]
+### Added
+- Use nginx X-Accel-Redirect header to serve files when running
+  behind nginx
+
+### Changed
+
+### Removed
+
+
 ## [0.4.1]
 ### Added
 - Release script for downloaded, unpacking, and symlinking
