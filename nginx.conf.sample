@@ -36,7 +36,7 @@ server {
     # # out of the application.
     # location /private/ {
     #     internal;
-    #     alias /<PATH_TO_PROJ_ROOT>/uploads;
+    #     alias /<PATH_TO_PROJ_ROOT>/uploads/;
     # }
     #
     # location / {
@@ -119,7 +119,7 @@ server {
     # out of the application.
     location /private/ {
         internal;
-        alias /<PATH_TO_PROJ_ROOT>/uploads;
+        alias /<PATH_TO_PROJ_ROOT>/uploads/;
     }
 
     location / {
