@@ -70,6 +70,14 @@ Packaged releases are built and packaged by travis-ci. Complete packaged release
        # setup "latest" symlink
        ln -sfn $TAG latest
        ```
+    - Setup an uploads directory where transfer uploads can exist between application code updates.
+      Make sure your `config.ron` file is updated and copied to the config directory.
+      ```bash
+      mkdir transfer_uploads
+      vim latest/config.ron  # update "upload_directory" to "/<ABS_PATH_TO>/transfer/transfer_uploads"
+      # and copy to the config directory
+      cp latest/config.ron `latest/bin/transfer admin config-dir`
+      ```
     - Setup the database
       ```bash
       latest/bin/transfer admin database setup
