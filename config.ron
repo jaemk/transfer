@@ -23,4 +23,8 @@
 
     // interval between cleanup of expired items (upload, init_upload, init_download)
     expired_cleanup_interval_secs: 120,
+
+    // Absolute path of upload directory
+    // or relative path from the running directory
+    upload_directory: "uploads",
 )

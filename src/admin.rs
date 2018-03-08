@@ -1,16 +1,14 @@
 /*!
 General Admin commands
 */
-use std::env;
-
 use sweep;
+use models::CONFIG;
 use errors::*;
 
 
 /// Cleanup files that no longer have an associated record in the database
 pub fn sweep_files() -> Result<()> {
-    let dir = env::current_dir()?;
-    let upload_dir = dir.join("uploads");
+    let upload_dir = CONFIG.upload_dir()?;
     if upload_dir.is_dir() && upload_dir.exists() {
         let n = sweep::sweep_fs(&upload_dir)?;
         info!("** Cleaned up {} orphaned files **", n);

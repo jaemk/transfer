@@ -39,6 +39,16 @@ pub struct Config {
     pub download_timeout_secs: i64,
     pub download_limit_default: Option<i32>,
     pub expired_cleanup_interval_secs: u64,
+    pub upload_directory: String,
+}
+impl Config {
+    pub fn upload_dir(&self) -> Result<PathBuf> {
+        let path = PathBuf::from(&self.upload_directory);
+        if path.is_absolute() { Ok(path) }
+        else {
+            Ok(env::current_dir()?.join(&self.upload_directory))
+        }
+    }
 }
 
 
@@ -313,8 +323,8 @@ impl Upload {
     /// Convert an `Upload`s `uuid` into a valid upload file-path
     pub fn new_file_path(uuid: &Uuid) -> Result<PathBuf> {
         use hex::ToHex;
-        let base_dir = env::current_dir()?;
-        Ok(base_dir.join("uploads").join(uuid.as_bytes().to_hex()))
+        let upload_dir = CONFIG.upload_dir()?;
+        Ok(upload_dir.join(uuid.as_bytes().to_hex()))
     }
 
     /// Return the `upload` record for the given `uuid` or `ErrorKind::DoesNotExist`
