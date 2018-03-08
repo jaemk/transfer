@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.3]
+### Added
+- Support configurable uploads directory
+
+### Changed
+- Update setup directions to setup an upload directory that
+  is shared between application code updates
+
+### Removed
+
+----
+
 ## [0.4.2]
 ### Added
 - Use nginx X-Accel-Redirect header to serve files when running
@@ -9,6 +21,7 @@
 
 ### Removed
 
+----
 
 ## [0.4.1]
 ### Added
@@ -22,6 +35,7 @@
 ### Removed
 - deploy script
 
+----
 
 ## [0.4.0]
 ### Added
