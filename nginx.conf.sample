@@ -119,7 +119,9 @@ server {
     # out of the application.
     location /private/ {
         internal;
-        alias /<PATH_TO_PROJ_ROOT>/uploads/;
+        alias /<PATH_TO_UPLOAD_DIR>/;
+        # e.g.
+        # alias /home/<user>/projects/transfer/transfer_uploads/;
     }
 
     location / {
