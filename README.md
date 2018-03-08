@@ -125,6 +125,6 @@ Packaged releases are built and packaged by travis-ci. Complete packaged release
       ```
     - Apply migrations and restart the app
       ```bash
-      bin/x86_64/transfer admin database migrate
-      systemctl restart transfer
+      latest/bin/transfer admin database migrate
+      sudo systemctl restart transfer
       ```
