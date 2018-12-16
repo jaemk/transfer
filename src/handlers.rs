@@ -40,7 +40,7 @@ pub fn api_upload_defaults(_: &Request) -> Result<Response> {
 #[derive(Deserialize)]
 struct UploadInitPost {
     nonce: String,
-    file_name: String,
+    file_name_hash: String,
     size: u64,
     content_hash: String,
     access_password: String,
@@ -59,7 +59,7 @@ impl UploadInitPost {
         };
         Ok(UploadInit {
             nonce: Vec::from_hex(&self.nonce)?,
-            file_name: self.file_name.to_owned(),
+            file_name_hash: Vec::from_hex(&self.file_name_hash)?,
             size: self.size as i64,
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
@@ -74,7 +74,7 @@ impl UploadInitPost {
 #[derive(Debug)]
 struct UploadInit {
     nonce: Vec<u8>,
-    file_name: String,
+    file_name_hash: Vec<u8>,
     size: i64,
     content_hash: Vec<u8>,
     access_password: Vec<u8>,
@@ -119,7 +119,7 @@ pub fn api_upload_init(request: &Request, pool: &db::Pool) -> Result<Response> {
         };
         let new_init_upload = models::NewInitUpload {
             uuid: uuid,
-            file_name: info.file_name,
+            file_name_hash: info.file_name_hash,
             content_hash: info.content_hash,
             size: info.size,
             nonce: info.nonce,
@@ -416,6 +416,6 @@ pub fn api_download_confirm(request: &Request, pool: &db::Pool) -> Result<Respon
         init_download.delete(&trans)?;
         upload
     };
-    Ok(json!({"file_name": &upload.file_name}).to_resp()?)
+    Ok(json!({"file_name_hash": upload.file_name_hash.to_hex()}).to_resp()?)
 }
 

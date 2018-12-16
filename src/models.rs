@@ -99,10 +99,10 @@ impl FromRow for Auth {
     }
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:             row.get(0),
-            salt:           row.get(1),
-            hash:           row.get(2),
-            date_created:   row.get(3),
+            id:             row.get("id"),
+            salt:           row.get("salt"),
+            hash:           row.get("hash"),
+            date_created:   row.get("date_created"),
         }
     }
 }
@@ -129,7 +129,7 @@ impl Auth {
 /// For initializing a new `InitUpload` record
 pub struct NewInitUpload {
     pub uuid: Uuid,
-    pub file_name: String,
+    pub file_name_hash: Vec<u8>,
     pub content_hash: Vec<u8>,
     pub size: i64,
     pub nonce: Vec<u8>,
@@ -141,15 +141,15 @@ pub struct NewInitUpload {
 impl NewInitUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<InitUpload> {
         let stmt = "insert into init_upload \
-                    (uuid_, file_name, content_hash, size_, nonce, access_password, deletion_password, download_limit, expire_date) \
+                    (uuid_, file_name_hash, content_hash, size_, nonce, access_password, deletion_password, download_limit, expire_date) \
                     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
                     returning id, date_created";
-        try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name, &self.content_hash, &self.size,
+        try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.file_name_hash, &self.content_hash, &self.size,
                                         &self.nonce, &self.access_password, &self.deletion_password,
                                         &self.download_limit, &self.expire_date]);
                             InitUpload;
                             id: 0, date_created: 1;
-                            uuid: self.uuid, file_name: self.file_name, content_hash: self.content_hash,
+                            uuid: self.uuid, file_name_hash: self.file_name_hash, content_hash: self.content_hash,
                             size: self.size, nonce: self.nonce, access_password: self.access_password,
                             deletion_password: self.deletion_password, download_limit: self.download_limit,
                             expire_date: self.expire_date)
@@ -161,7 +161,7 @@ impl NewInitUpload {
 pub struct InitUpload {
     pub id: i32,
     pub uuid: Uuid,
-    pub file_name: String,
+    pub file_name_hash: Vec<u8>,
     pub content_hash: Vec<u8>,
     pub size: i64,
     pub nonce: Vec<u8>,
@@ -177,17 +177,17 @@ impl FromRow for InitUpload {
     }
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:                 row.get(0),
-            uuid:               row.get(1),
-            file_name:          row.get(2),
-            content_hash:       row.get(3),
-            size:               row.get(4),
-            nonce:              row.get(5),
-            access_password:    row.get(6),
-            deletion_password:  row.get(7),
-            download_limit:     row.get(8),
-            expire_date:        row.get(9),
-            date_created:       row.get(10),
+            id:                 row.get("id"),
+            uuid:               row.get("uuid_"),
+            file_name_hash:     row.get("file_name_hash"),
+            content_hash:       row.get("content_hash"),
+            size:               row.get("size_"),
+            nonce:              row.get("nonce"),
+            access_password:    row.get("access_password"),
+            deletion_password:  row.get("deletion_password"),
+            download_limit:     row.get("download_limit"),
+            expire_date:        row.get("expire_date"),
+            date_created:       row.get("date_created"),
         }
     }
 }
@@ -222,7 +222,7 @@ impl InitUpload {
             uuid: self.uuid,
             content_hash: self.content_hash,
             size: self.size,
-            file_name: self.file_name,
+            file_name_hash: self.file_name_hash,
             file_path: pb,
             nonce: self.nonce,
             access_password: self.access_password,
@@ -255,7 +255,7 @@ pub struct NewUpload {
     pub uuid: Uuid,
     pub content_hash: Vec<u8>,
     pub size: i64,
-    pub file_name: String,
+    pub file_name_hash: Vec<u8>,
     pub file_path: String,
     pub nonce: Vec<u8>,
     pub access_password: i32,
@@ -266,15 +266,15 @@ pub struct NewUpload {
 impl NewUpload {
     pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<Upload> {
         let stmt = "insert into upload \
-                    (uuid_, content_hash, size_, file_name, file_path, nonce, access_password, deletion_password, download_limit, expire_date) \
+                    (uuid_, content_hash, size_, file_name_hash, file_path, nonce, access_password, deletion_password, download_limit, expire_date) \
                     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) \
                     returning id, deleted, date_created";
-        try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.size, &self.file_name,
+        try_query_to_model!(conn.query(stmt, &[&self.uuid, &self.content_hash, &self.size, &self.file_name_hash,
                                                 &self.file_path, &self.nonce, &self.access_password, &self.deletion_password,
                                                 &self.download_limit, &self.expire_date]);
                             Upload;
                             id: 0, deleted: 1, date_created: 2;
-                            uuid: self.uuid, content_hash: self.content_hash, size: self.size, file_name: self.file_name,
+                            uuid: self.uuid, content_hash: self.content_hash, size: self.size, file_name_hash: self.file_name_hash,
                             file_path: self.file_path, nonce: self.nonce, access_password: self.access_password,
                             deletion_password: self.deletion_password, download_limit: self.download_limit, expire_date: self.expire_date)
     }
@@ -287,7 +287,7 @@ pub struct Upload {
     pub uuid: Uuid,
     pub content_hash: Vec<u8>,
     pub size: i64,
-    pub file_name: String,
+    pub file_name_hash: Vec<u8>,
     pub file_path: String,
     pub nonce: Vec<u8>,
     pub access_password: i32,
@@ -303,19 +303,19 @@ impl FromRow for Upload {
     }
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:                 row.get(0),
-            uuid:               row.get(1),
-            content_hash:       row.get(2),
-            size:               row.get(3),
-            file_name:          row.get(4),
-            file_path:          row.get(5),
-            nonce:              row.get(6),
-            access_password:    row.get(7),
-            deletion_password:  row.get(8),
-            download_limit:     row.get(9),
-            expire_date:        row.get(10),
-            deleted:            row.get(11),
-            date_created:       row.get(12),
+            id:                 row.get("id"),
+            uuid:               row.get("uuid_"),
+            content_hash:       row.get("content_hash"),
+            size:               row.get("size_"),
+            file_name_hash:     row.get("file_name_hash"),
+            file_path:          row.get("file_path"),
+            nonce:              row.get("nonce"),
+            access_password:    row.get("access_password"),
+            deletion_password:  row.get("deletion_password"),
+            download_limit:     row.get("download_limit"),
+            expire_date:        row.get("expire_date"),
+            deleted:            row.get("deleted"),
+            date_created:       row.get("date_created"),
         }
     }
 }
@@ -346,7 +346,7 @@ impl Upload {
         })
     }
 
-    /// Check if an `upload` record with the given `file_name` exists and is available for download
+    /// Check if an `upload` record with the given `uuid` exists and is available for download
     pub fn uuid_exists_available<T: GenericConnection>(conn: &T, uuid: &Uuid) -> Result<bool> {
         let stmt = "select exists(select 1 from upload where uuid_ = $1 and deleted = false)";
         try_query_aggregate!(conn.query(stmt, &[&uuid]), bool)
@@ -435,11 +435,11 @@ impl FromRow for InitDownload {
 
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:             row.get(0),
-            uuid:           row.get(1),
-            usage:          row.get(2),
-            upload:         row.get(3),
-            date_created:   row.get(4),
+            id:             row.get("id"),
+            uuid:           row.get("uuid_"),
+            usage:          row.get("usage"),
+            upload:         row.get("upload"),
+            date_created:   row.get("date_created"),
         }
     }
 }
@@ -513,9 +513,9 @@ impl FromRow for Download {
 
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:             row.get(0),
-            upload:         row.get(1),
-            date_created:   row.get(2),
+            id:             row.get("id"),
+            upload:         row.get("upload"),
+            date_created:   row.get("date_created"),
         }
     }
 }
@@ -535,10 +535,10 @@ impl FromRow for Status {
     }
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:             row.get(0),
-            upload_count:   row.get(1),
-            total_bytes:    row.get(2),
-            date_modified:  row.get(3),
+            id:             row.get("id"),
+            upload_count:   row.get("upload_count"),
+            total_bytes:    row.get("total_bytes"),
+            date_modified:  row.get("date_modified"),
         }
     }
 }
