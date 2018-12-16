@@ -98,13 +98,15 @@ class Upload extends Component {
       deletePassHex = Buffer.from(deletePassBytes).toString('hex')
     }
 
-    const encryptUploadData = (data, params, headers) => {
+    const encryptUploadData = (data, file_name, params, headers) => {
       const encryptedBytesCallback = (bytes) => {
         this.setState({encryptProgress: 100});
         params.size = bytes.length
         axios.post('/api/upload/init', params, headers).then(resp => {
+          const file_name_b64 = btoa(file_name)
+          const fileNameContainingKey = resp.data.key + '_' + file_name_b64
           const key = resp.data.key
-          this.setState({key: key});
+          this.setState({key: fileNameContainingKey});
           const config = {
             headers: {'content-type': 'application/octet-stream'},
             onUploadProgress: (event) => this.setState({uploadProgress: (event.loaded / event.total * 100)}),
@@ -113,7 +115,7 @@ class Upload extends Component {
             .then(resp => {
               console.log(resp);
               this.setState({
-                downloadUrl: `/download?key=${key}`,
+                downloadUrl: `/download?key=${fileNameContainingKey}`,
                 uploadProgress: 100,
                 responseStatus: resp.status,
               });
@@ -132,22 +134,27 @@ class Upload extends Component {
       this.setState({loadProgress: 100});
 
       const data = reader.result
+      const fileNameBytes = new TextEncoder().encode(file.name)
       console.log(`loaded ${data.byteLength} bytes`)
       window.crypto.subtle.digest('SHA-256', data).then(contentHash => {
-        this.setState({encryptProgress: this.state.encryptProgress + 60});
-        const contentHashHex = Buffer.from(contentHash).toString('Hex')
-        console.log('content hash', contentHashHex)
-        const params = {
-          nonce: nonceHex,
-          file_name: file.name,
-          content_hash: contentHashHex,
-          access_password: accessPassHex,
-          deletion_password: deletePassHex,
-          download_limit: downloadLimit,
-          lifespan: lifespan,
-        }
-        const headers = {headers: {'content-type': 'application/json'}}
-        encryptUploadData(data, params, headers)
+        window.crypto.subtle.digest('SHA-256', fileNameBytes).then(fileNameHash => {
+          this.setState({encryptProgress: this.state.encryptProgress + 60});
+          const contentHashHex = Buffer.from(contentHash).toString('Hex')
+          const fileNameHashHex = Buffer.from(fileNameHash).toString('Hex')
+          console.log('content hash', contentHashHex)
+          console.log('file_name hash', fileNameHashHex)
+          const params = {
+            nonce: nonceHex,
+            file_name_hash: fileNameHashHex,
+            content_hash: contentHashHex,
+            access_password: accessPassHex,
+            deletion_password: deletePassHex,
+            download_limit: downloadLimit,
+            lifespan: lifespan,
+          }
+          const headers = {headers: {'content-type': 'application/json'}}
+          encryptUploadData(data, file.name, params, headers)
+        }).catch(this.catchErr)
       }).catch(this.catchErr)
     }
     reader.onprogress = (event) => {

@@ -20,6 +20,9 @@ class Download extends Component {
     super(props);
     this.state = {
       key: '',
+      encodedFileName: '',
+      fileName: '',
+      fileNameBytes: '',
       accessPass: '',
       encryptPass: '',
       errorMessage: '',
@@ -40,9 +43,16 @@ class Download extends Component {
   componentWillMount() {
     const search = this.props.location.search;
     const params = new URLSearchParams(search);
-    const key = params.get('key');
+    const keyWithEncodedName = params.get('key');
+    const [key, encodedName] = keyWithEncodedName.split('_');
+    const fileName = atob(encodedName);
     if (key) {
-      this.setState({key: key});
+      this.setState({
+        key: key,
+        encodedFileName: encodedName,
+        fileName: fileName,
+        fileNameBytes: new TextEncoder().encode(fileName),
+      });
     }
   }
 
@@ -85,9 +95,21 @@ class Download extends Component {
         console.log(`params: ${params}`)
         const headers = {headers: {'content-type': 'application/json'}}
         axios.post('/api/download/confirm', params, headers).then(resp => {
-          this.setState({responseStatus: resp.status});
-          const blob = new Blob([bytes], {type: 'application/octet-stream'})
-          FileSaver.saveAs(blob, resp.data.file_name)
+          window.crypto.subtle.digest('SHA-256', this.state.fileNameBytes).then(fileNameHash => {
+            const fileNameHashHex = Buffer.from(fileNameHash).toString('Hex');
+            console.log(resp);
+            if (fileNameHashHex !== resp.data.file_name_hash) {
+              throw Error(
+                'Download integrity error: expected file name hash ' +
+                fileNameHashHex +
+                ' received '
+                + resp.file_name_hash
+              );
+            }
+            this.setState({responseStatus: resp.status});
+            const blob = new Blob([bytes], {type: 'application/octet-stream'})
+            FileSaver.saveAs(blob, this.state.fileName)
+          }).catch(this.catchErr)
         }).catch(this.catchErr)
       }).catch(this.catchErr)
     }
