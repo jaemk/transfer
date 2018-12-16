@@ -1,6 +1,7 @@
 /target/
 **/*.rs.bk
 .migrant.toml
+Migrant.toml
 
 uploads/*
 !uploads/.gitkeep
