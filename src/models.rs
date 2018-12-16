@@ -322,9 +322,8 @@ impl FromRow for Upload {
 impl Upload {
     /// Convert an `Upload`s `uuid` into a valid upload file-path
     pub fn new_file_path(uuid: &Uuid) -> Result<PathBuf> {
-        use hex::ToHex;
         let upload_dir = CONFIG.upload_dir()?;
-        Ok(upload_dir.join(uuid.as_bytes().to_hex()))
+        Ok(upload_dir.join(hex::encode(uuid.as_bytes())))
     }
 
     /// Return the `upload` record for the given `uuid` or `ErrorKind::DoesNotExist`

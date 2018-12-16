@@ -7,7 +7,7 @@ use std::path;
 use std::fs;
 
 use rouille::{Request, Response};
-use hex::{FromHex, ToHex};
+use hex::FromHex;
 use uuid::Uuid;
 use chrono::{Utc, Duration, DateTime};
 
@@ -99,7 +99,7 @@ pub fn api_upload_init(request: &Request, pool: &db::Pool) -> Result<Response> {
         bail_fmt!(ErrorKind::UploadTooLarge, "Upload too large, max bytes: {}", models::CONFIG.upload_limit_bytes)
     }
     let uuid = Uuid::new_v4();
-    let uuid_hex = uuid.as_bytes().to_hex();
+    let uuid_hex = hex::encode(uuid.as_bytes());
 
     {
         let conn = pool.get()?;
@@ -337,10 +337,10 @@ pub fn api_download_init(request: &Request, pool: &db::Pool) -> Result<Response>
         (upload, init_download_content, init_download_confirm)
     };
     let resp = json!({
-        "nonce": upload.nonce.to_hex(),
+        "nonce": hex::encode(&upload.nonce),
         "size": upload.size,
-        "download_key": init_download_content.uuid.as_bytes().to_hex(),
-        "confirm_key": init_download_confirm.uuid.as_bytes().to_hex(),
+        "download_key": hex::encode(init_download_content.uuid.as_bytes()),
+        "confirm_key": hex::encode(init_download_confirm.uuid.as_bytes()),
     }).to_resp()?;
     Ok(resp)
 }
@@ -375,7 +375,7 @@ pub fn api_download(request: &Request, pool: &db::Pool) -> Result<Response> {
         upload
     };
     if request.header("x-proxy-nginx").unwrap_or("") == "true" {
-        let upload_path = format!("/private/{}", upload.uuid.as_bytes().to_hex());
+        let upload_path = format!("/private/{}", hex::encode(upload.uuid.as_bytes()));
         let resp = Response::empty_400()
             .with_status_code(200)
             .with_additional_header("x-accel-redirect", upload_path)
@@ -416,6 +416,6 @@ pub fn api_download_confirm(request: &Request, pool: &db::Pool) -> Result<Respon
         init_download.delete(&trans)?;
         upload
     };
-    Ok(json!({"file_name_hash": upload.file_name_hash.to_hex()}).to_resp()?)
+    Ok(json!({"file_name_hash": hex::encode(&upload.file_name_hash)}).to_resp()?)
 }
 

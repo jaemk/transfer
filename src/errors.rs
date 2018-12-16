@@ -17,7 +17,7 @@ error_chain! {
     foreign_links {
         Io(std::io::Error);
         LogInit(log::SetLoggerError) #[doc = "Error initializing env_logger"];
-        ConnTimeout(r2d2::GetTimeout);
+        ConnError(r2d2::Error);
         ParseInt(std::num::ParseIntError);
         Json(serde_json::Error);
         Uuid(uuid::ParseError);

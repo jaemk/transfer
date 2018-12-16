@@ -31,11 +31,13 @@ pub fn connect_str() -> Result<String> {
 
 /// Initialize a new r2d2 postgres connection pool
 pub fn init_pool() -> Pool {
-    let config = r2d2::Config::default();
+//    let config = r2d2::Config::default();
     let conn_str = connect_str().expect("Failed to build connection string");
     let manager = PostgresConnectionManager::new(conn_str, TlsMode::None)
         .expect("Failed to connect to db");
-    r2d2::Pool::new(config, manager)
+    r2d2::Pool::builder()
+        .min_idle(Some(3))
+        .build(manager)
         .expect("Failed to create db pool")
 }
 

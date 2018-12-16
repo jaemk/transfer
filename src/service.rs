@@ -1,9 +1,9 @@
 /*!
 Service initialization
 */
-use std::env;
 use std::thread;
 use std::time;
+use std::io::Write;
 
 use env_logger;
 use chrono::Local;
@@ -35,17 +35,16 @@ fn init_status() -> Result<()> {
 pub fn start(host: &str, port: u16) -> Result<()> {
     // Set a custom logging format & change the env-var to "LOG"
     // e.g. LOG=info chatbot serve
-    env_logger::LogBuilder::new()
-        .format(|record| {
-            format!("{} [{}] - [{}] -> {}",
+    let mut logger = env_logger::Builder::from_env("LOG");
+    logger.format(|buf, record| {
+            writeln!(buf, "{} [{}] - [{}] -> {}",
                 Local::now().format("%Y-%m-%d_%H:%M:%S"),
                 record.level(),
-                record.location().module_path(),
+                record.target(),
                 record.args()
                 )
             })
-        .parse(&env::var("LOG").unwrap_or_default())
-        .init()?;
+        .init();
 
     // force a config load
     let _ = models::CONFIG;
@@ -81,7 +80,7 @@ pub fn start(host: &str, port: u16) -> Result<()> {
                 Err(e) => {
                     use self::ErrorKind::*;
                     error!("Handler Error: {}", e);
-                    match *e {
+                    match e.kind() {
                         BadRequest(ref s) => {
                             // bad request
                             let body = json!({"error": s});

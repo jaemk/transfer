@@ -5,28 +5,28 @@ authors = ["James Kominick <james.kominick@gmail.com>"]
 
 [dependencies]
 clap = "2"
-log = "0.3"
-env_logger = "0.4"
-error-chain = "0.11"
-ron = "0.1"
-lazy_static = "0.2"
+log = "0.4"
+env_logger = "0.6"
+error-chain = "0.12"
+ron = "0.4"
+lazy_static = "1"
 
 serde = "1"
 serde_derive = "1"
 serde_json = "1"
 serde_urlencoded = "0.5"
 
-ring = "0.11"
+ring = "0.13"
 rust-crypto = "0.2"
-hex = "0.2"
+hex = "0.3"
 chrono = "0.4"
 uuid = { version = "0.5", features = ["v4", "use_std"] }
 
 postgres = { version = "0.15", features = ["with-uuid", "with-chrono"] }
-r2d2 = "0.7"
-r2d2_postgres = "0.13"
+r2d2 = "0.8"
+r2d2_postgres = "0.14"
 xdg = "2"
-migrant_lib = { version = "0.19", features = ["d-postgres"] }
+migrant_lib = { version = "0.21", features = ["d-postgres"] }
 
 rouille = "2"
 
