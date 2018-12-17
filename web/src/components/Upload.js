@@ -46,6 +46,8 @@ class Upload extends Component {
 
 
   submit(e) {
+    if (this.state.submitted) { return }
+
     let file = document.getElementById('file').files[0]
 
     let required = {};
