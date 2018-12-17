@@ -251,7 +251,7 @@ class Upload extends Component {
           <Button
             type="submit"
             disabled={disable}
-            onTouchTap={this.submit}
+            onClick={this.submit}
           >
             Encrypt {'&'} Upload
           </Button>

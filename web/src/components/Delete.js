@@ -110,7 +110,7 @@ class Delete extends Component {
           <Button
             type="submit"
             disabled={disable}
-            onTouchTap={this.delete}
+            onClick={this.delete}
           >
             Delete Upload
           </Button>

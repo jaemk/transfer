@@ -206,7 +206,7 @@ class Download extends Component {
           <Button
             type="submit"
             disabled={disable}
-            onTouchTap={this.download}
+            onClick={this.download}
           >
             Download {'&'} Decrypt
           </Button>
