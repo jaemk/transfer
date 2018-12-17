@@ -1,6 +1,5 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import injectTapEventPlugin from 'react-tap-event-plugin';
 import { Router, Route, Switch, Redirect } from 'react-router-dom';
 import { createHashHistory } from 'history';
 import './index.css';
@@ -10,7 +9,6 @@ import Download from './components/Download';
 import Delete from './components/Delete';
 import NotFound from './components/NotFound';
 import 'bootstrap/dist/css/bootstrap.css';
-injectTapEventPlugin();
 
 const history = createHashHistory({
   basename: '',
