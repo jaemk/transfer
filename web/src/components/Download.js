@@ -44,15 +44,21 @@ class Download extends Component {
     const search = this.props.location.search;
     const params = new URLSearchParams(search);
     const keyWithEncodedName = params.get('key');
-    const [key, encodedName] = keyWithEncodedName.split('_');
-    const fileName = atob(encodedName);
-    if (key) {
-      this.setState({
-        key: key,
-        encodedFileName: encodedName,
-        fileName: fileName,
-        fileNameBytes: new TextEncoder().encode(fileName),
-      });
+    if (keyWithEncodedName) {
+      const parts = keyWithEncodedName.split('_');
+      if (parts.length === 1) {
+        const [key] = parts;
+        this.setState({key: key});
+      } else {
+        const [key, encodedName] = parts;
+        const fileName = atob(encodedName);
+        this.setState({
+          key: key,
+          encodedFileName: encodedName,
+          fileName: fileName,
+          fileNameBytes: new TextEncoder().encode(fileName),
+        });
+      }
     }
   }
 
@@ -90,14 +96,13 @@ class Download extends Component {
       window.crypto.subtle.digest('SHA-256', bytes).then(contentHash => {
         this.setState({decryptProgress: 100});
         const hex = Buffer.from(contentHash).toString('hex')
-        console.log('decrypted bytes hex', hex)
+        // console.log('decrypted bytes hex', hex)
         const params = {key: confirmKey, hash: hex}
-        console.log(`params: ${params}`)
+        // console.log(`params: ${params}`)
         const headers = {headers: {'content-type': 'application/json'}}
         axios.post('/api/download/confirm', params, headers).then(resp => {
           window.crypto.subtle.digest('SHA-256', this.state.fileNameBytes).then(fileNameHash => {
             const fileNameHashHex = Buffer.from(fileNameHash).toString('Hex');
-            console.log(resp);
             if (fileNameHashHex !== resp.data.file_name_hash) {
               throw Error(
                 'Download integrity error: expected file name hash ' +

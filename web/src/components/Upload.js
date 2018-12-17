@@ -113,7 +113,6 @@ class Upload extends Component {
           };
           axios.post(`/api/upload?key=${key}`, bytes, config)
             .then(resp => {
-              console.log(resp);
               this.setState({
                 downloadUrl: `/download?key=${fileNameContainingKey}`,
                 uploadProgress: 100,
@@ -130,7 +129,7 @@ class Upload extends Component {
       if (reader.readyState !== 2) {
         return
       }
-      console.log(`done: read ${event.loaded} bytes`)
+      console.log(`read ${event.loaded} bytes`)
       this.setState({loadProgress: 100});
 
       const data = reader.result

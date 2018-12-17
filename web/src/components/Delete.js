@@ -28,8 +28,9 @@ class Delete extends Component {
   componentWillMount() {
     const search = this.props.location.search;
     const params = new URLSearchParams(search);
-    const key = params.get('key');
+    let key = params.get('key');
     if (key) {
+      [key] = key.split('_');
       this.setState({key: key});
     }
   }

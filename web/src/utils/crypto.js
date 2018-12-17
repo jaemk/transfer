@@ -47,7 +47,7 @@ export const bytesFromHex = (s) => {
 export const encrypt = (data, nonce, pass, callback) => {
   crypto.subtle.digest('SHA-256', pass).then(passHash => {
     const algo = {name: algoName, iv: nonce}
-    console.log(nonce)
+    // console.log(nonce)
     crypto.subtle.importKey('raw', passHash, algo, false, ['encrypt']).then((key) => {
       crypto.subtle.encrypt(algo, key, data).then((encryptedData) => {
         let dataBytes = new Uint8Array(encryptedData)
