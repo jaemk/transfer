@@ -103,8 +103,11 @@ class Web(object):
         print("** Copying bundled files to assets/static **")
         cmd('cp', pjoin(cls.build_out, 'js', 'main.*.js'),      pjoin(cls.static_dir, 'js', 'main.js'))
         cmd('cp', pjoin(cls.build_out, 'css', 'main.*.css'),    pjoin(cls.static_dir, 'css', 'main.css'))
-        cmd('cp', pjoin(cls.build_out, 'media', '*'),           pjoin(cls.static_dir, 'media'))
         cmd('cp', pjoin(cls.web_public, 'manifest.json'),       pjoin(cls.static_dir, 'manifest.json'))
+
+        build_media_dir = pjoin(cls.build_out, 'media')
+        if os.path.exists(build_media_dir):
+            cmd('cp', pjoin(cls.build_out, 'media', '*'),           pjoin(cls.static_dir, 'media'))
 
 
 def run(build_target):
