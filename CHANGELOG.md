@@ -2,6 +2,7 @@
 
 ## [0.4.5]
 ### Added
+- add `/status` endpoint with status and app version
 
 ### Changed
 - update frontend to bootstrap4

@@ -1,6 +1,6 @@
 [package]
 name = "transfer"
-version = "0.4.3"
+version = "0.4.5"
 authors = ["James Kominick <james.kominick@gmail.com>"]
 
 [dependencies]
