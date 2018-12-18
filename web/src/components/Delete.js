@@ -37,6 +37,7 @@ class Delete extends Component {
   }
 
   delete() {
+    if (this.state.submitted) { return }
     let required = {};
     if (this.state.key.length === 0) {
       required.key = true;
@@ -49,10 +50,11 @@ class Delete extends Component {
     if (Object.keys(required).length > 0) {
       inputOk = false;
     }
-    this.setState({required: required, submitted: true, inputOk: inputOk});
     if (!inputOk) {
+      this.setState({required: required, submitted: false, inputOk: inputOk});
       return;
     }
+    this.setState({required: required, submitted: true, inputOk: inputOk});
 
     const params = {key: this.state.key, deletion_password: Buffer.from(this.state.deletePass).toString('hex')}
     const headers = {headers: {'content-type': 'application/json'}}

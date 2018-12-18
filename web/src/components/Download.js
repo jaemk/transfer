@@ -69,6 +69,7 @@ class Download extends Component {
   }
 
   download() {
+    if (this.state.submitted) { return }
     let required = {};
     if (this.state.key.length === 0) {
       required.key = true;
@@ -83,11 +84,15 @@ class Download extends Component {
     if (Object.keys(required).length > 0) {
       inputOk = false;
     }
-    this.setState({required: required, submitted: true, inputOk: inputOk});
     if (!inputOk) {
+      this.setState({required: required, submitted: false, inputOk: inputOk});
       return;
     }
+
     this.setState({
+      required: required,
+      submitted: true,
+      inputOk: inputOk,
       downloadProgress: 5,
       decryptProgress: 5,
     });
