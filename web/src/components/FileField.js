@@ -1,5 +1,5 @@
 import React from 'react';
-import { FormGroup, FormControl, ControlLabel } from 'react-bootstrap';
+import Form from 'react-bootstrap/lib/Form';
 
 
 /**
@@ -12,23 +12,17 @@ import { FormGroup, FormControl, ControlLabel } from 'react-bootstrap';
  */
 const FileField = ({title, domId, disabled, required}) => {
   return (
-    <FormGroup
-      validationState={required? 'warning' : null}
-    >
-      <ControlLabel>{title}</ControlLabel>
+    <Form.Group>
+      <Form.Label>{title}</Form.Label>
       {' '}
-      <FormControl
+      <Form.Control
         id={domId}
         type="file"
         disabled={disabled}
+        isInvalid={!!required}
       />
-      {
-        required?
-          <span style={{color: 'red'}}> required </span>
-          :
-          ''
-      }
-    </FormGroup>
+      <Form.Control.Feedback type="invalid">* Required</Form.Control.Feedback>
+    </Form.Group>
   );
 }
 

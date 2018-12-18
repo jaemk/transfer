@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import { Button, Form } from 'react-bootstrap';
+import Button from 'react-bootstrap/lib/Button';
+import Form from 'react-bootstrap/lib/Form';
 import axios from 'axios';
 import TextField from './TextField';
 import PasswordField from './PasswordField';
@@ -89,7 +90,7 @@ class Delete extends Component {
 
     return (
       <div>
-        <Form inline onSubmit={this.delete}>
+        <Form noValidate onSubmit={this.delete}>
           <TextField
             title="Upload Key"
             value={this.state.key}
@@ -100,7 +101,7 @@ class Delete extends Component {
           <br/>
 
           <PasswordField
-            title="Delete"
+            title="Deletion"
             disabled={disable}
             update={(v) => this.setState({deletePass: v})}
             required={this.state.required.deletePass}

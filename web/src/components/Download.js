@@ -1,7 +1,8 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
 import { withRouter } from 'react-router-dom';
-import { Button, Form } from 'react-bootstrap';
+import Button from 'react-bootstrap/lib/Button';
+import Form from 'react-bootstrap/lib/Form';
 import axios from 'axios';
 import FileSaver from 'file-saver';
 import TextField from './TextField';
@@ -175,7 +176,7 @@ class Download extends Component {
     }
     return (
       <div>
-        <Form inline onSubmit={this.download}>
+        <Form noValidate onSubmit={this.download}>
           <TextField
             title="Download Key"
             value={this.state.key}
@@ -196,7 +197,7 @@ class Download extends Component {
 
           <PasswordField
             no_confirm={true}
-            title="Decrypt"
+            title="Decryption"
             disabled={disable}
             update={(v) => this.setState({encryptPass: v})}
             required={this.state.required.encryptPass}

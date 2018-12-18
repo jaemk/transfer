@@ -1,6 +1,7 @@
 import React, { Component } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Button, Form } from 'react-bootstrap';
+import Button from 'react-bootstrap/lib/Button';
+import Form from 'react-bootstrap/lib/Form';
 import axios from 'axios';
 import PasswordField from './PasswordField';
 import TextField from './TextField';
@@ -37,6 +38,7 @@ class Upload extends Component {
     };
     this.submit = this.submit.bind(this);
     this.catchErr = this.catchErr.bind(this);
+    this.update = this.update.bind(this);
   }
 
   catchErr(err) {
@@ -78,10 +80,11 @@ class Upload extends Component {
     if (Object.keys(required).length > 0 || Object.keys(errors).length > 0) {
       inputOk = false;
     }
-    this.setState({required: required, errors: errors, submitted: true, inputOk: inputOk});
     if (!inputOk) {
+      this.setState({required: required, errors: errors, submitted: false, inputOk: inputOk});
       return;
     }
+    this.setState({required: required, errors: errors, submitted: true, inputOk: inputOk});
 
     this.setState({
       loadProgress: 5,
@@ -166,6 +169,24 @@ class Upload extends Component {
     reader.readAsArrayBuffer(file)
   }
 
+  update(field, value, valid) {
+    let state = {required: this.state.required}
+    if (field === 'accessPass') {
+      state.accessPass = value;
+      state.accessValid = valid;
+      state.required.accessPass = false;
+    } else if (field === 'encryptPass') {
+      state.encryptPass = value;
+      state.encryptValid = valid;
+      state.required.encryptPass = false;
+    } else if (field === 'deletePass') {
+      state.deletePass = value;
+      state.deleteValid = valid;
+      state.required.deletePass = false;
+    }
+    this.setState(state);
+  }
+
   render() {
     const disable = this.state.submitted && this.state.inputOk;
     let message = null;
@@ -195,9 +216,10 @@ class Upload extends Component {
     }
     return (
       <div>
-        <Form inline onSubmit={this.submit}>
+        <Form noValidate onSubmit={this.submit}>
+          <br/>
           <FileField
-            title="Upload file"
+            title="File to encrypt and upload"
             domId="file"
             disabled={disable}
             required={this.state.required.file}
@@ -207,44 +229,62 @@ class Upload extends Component {
           <PasswordField
             title="Access"
             disabled={disable}
-            update={(v, valid) => this.setState({accessPass: v, accessValid: valid})}
+            update={(value, valid) => this.update('accessPass', value, valid)}
             required={this.state.required.accessPass}
           />
           <br/>
 
           <PasswordField
-            title="Encrypt"
+            title="Encryption"
             disabled={disable}
-            update={(v, valid) => this.setState({encryptPass: v, encryptValid: valid})}
+            update={(value, valid) => this.update('encryptPass', value, valid)}
             required={this.state.required.encryptPass}
           />
           <br/>
 
           <PasswordField
-            title="Delete"
+            title="Deletion"
             disabled={disable}
-            update={(v, valid) => this.setState({deletePass: v, deleteValid: valid})}
+            update={(value, valid) => this.update('deletePass', value, valid)}
             required={this.state.required.deletePass}
           />
           <br/>
 
           <TextField
-            title="Download Limit"
+            title="Delete After (downloads)"
             type="number"
             value={this.state.downloadLimit}
             disabled={disable}
-            update={(v) => this.setState({downloadLimit: v})}
+            update={(v) => {
+              let toSet = ''
+              if (v) {
+                const value = parseInt(v, 10);
+                if (value > 0) {
+                  toSet = v;
+                }
+              }
+              this.setState({downloadLimit: toSet})
+            }}
             required={false}
             error={this.state.errors.downloadLimit}
           />
           <br/>
 
           <TextField
-            title="Lifespan (seconds)"
+            title="Delete After (seconds)"
             type="number"
             value={this.state.lifespan}
             disabled={disable}
-            update={(v) => this.setState({lifespan: v})}
+            update={(v) => {
+              let toSet = ''
+              if (v) {
+                const value = parseInt(v, 10);
+                if (value > 0) {
+                  toSet = v;
+                }
+              }
+              this.setState({lifespan: toSet})
+            }}
             required={false}
             error={this.state.errors.lifespan}
           />

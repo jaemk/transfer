@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import { FormGroup, FormControl, ControlLabel } from 'react-bootstrap';
+import Form from 'react-bootstrap/lib/Form';
 
 
 class PasswordField extends Component {
@@ -46,37 +46,40 @@ class PasswordField extends Component {
 
     return (
       <div>
-        <FormGroup
-          validationState={this.props.required? 'warning' : this.validate()}
-        >
-          <ControlLabel>{this.props.title} Password</ControlLabel>
-          {' '}
-          <FormControl
-            type="password"
-            value={this.state.pass}
-            placeholder={this.props.title + "Password"}
-            onChange={(e) => update(e, 'pass', this.state.confirm)}
-            disabled={this.props.disabled}
-          />
+        <Form.Group>
+          <Form.Group>
+            <Form.Label>{this.props.title} Password</Form.Label>
+            {' '}
+            <Form.Control
+              type="password"
+              value={this.state.pass}
+              placeholder={this.props.title + "Password"}
+              onChange={(e) => update(e, 'pass', this.state.confirm)}
+              disabled={this.props.disabled}
+              isValid={this.state.pass}
+              isInvalid={!!this.props.required || (!this.state.pass && this.state.confirm)}
+              style={{maxWidth: 350}}
+            />
+            <Form.Control.Feedback type="invalid">* Required</Form.Control.Feedback>
+          </Form.Group>
           {' '}
           {
             this.props.no_confirm? ' ' :
-              <FormControl
-                type="password"
-                value={this.state.confirm}
-                placeholder={this.props.title + "Password Confirm"}
-                onChange={(e) => update(e, 'confirm', this.state.pass)}
-                disabled={this.props.disabled}
-              />
+              <div>
+                <Form.Control
+                  type="password"
+                  value={this.state.confirm}
+                  placeholder={this.props.title + "Password Confirm"}
+                  onChange={(e) => update(e, 'confirm', this.state.pass)}
+                  disabled={this.props.disabled}
+                  isValid={this.state.pass && this.state.pass === this.state.confirm}
+                  isInvalid={(this.state.pass || this.state.confirm) && this.state.pass !== this.state.confirm}
+                  style={{maxWidth: 350}}
+                />
+                <Form.Control.Feedback type="invalid">* Passwords must match</Form.Control.Feedback>
+              </div>
           }
-          <FormControl.Feedback />
-        </FormGroup>
-        {
-          this.props.required?
-            <span style={{color: 'red'}}> required </span>
-            :
-            ''
-        }
+        </Form.Group>
       </div>
     );
   }

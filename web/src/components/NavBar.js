@@ -1,6 +1,6 @@
 import React, { Component } from 'react';
 import PropTypes from 'prop-types';
-import { Nav, NavItem } from 'react-bootstrap';
+import Nav from 'react-bootstrap/lib/Nav';
 
 
 const URL_TO_INDEX = {
@@ -41,10 +41,22 @@ class NavBar extends Component {
     const isDisabled = (eventKey) => activeKey === eventKey;
     return (
       <div>
-        <Nav bsStyle="tabs" activeKey={activeKey} onSelect={this.handleSelect}>
-          <NavItem eventKey="1" disabled={isDisabled('1')}> Upload </NavItem>
-          <NavItem eventKey="2" disabled={isDisabled('2')}> Download </NavItem>
-          <NavItem eventKey="3" disabled={isDisabled('3')}> Delete </NavItem>
+        <Nav variant="tabs" activeKey={activeKey} onSelect={this.handleSelect}>
+          <Nav.Item>
+            <Nav.Link eventKey="1" disabled={isDisabled('1')}>
+              Upload
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="2" disabled={isDisabled('2')}>
+              Download
+            </Nav.Link>
+          </Nav.Item>
+          <Nav.Item>
+            <Nav.Link eventKey="3" disabled={isDisabled('3')}>
+              Delete
+            </Nav.Link>
+          </Nav.Item>
         </Nav>
       </div>
     )

@@ -1,5 +1,5 @@
 import React from 'react';
-import { ProgressBar as BSProgressBar } from 'react-bootstrap';
+import BSProgressBar from 'react-bootstrap/lib/ProgressBar';
 
 
 const ProgressBar = ({title, active, progress}) => {
@@ -8,8 +8,8 @@ const ProgressBar = ({title, active, progress}) => {
       <h4> {title} </h4>
       <BSProgressBar
         striped
-        active={active}
-        bsStyle={(progress >= 100)? 'success' : 'warning'}
+        animated={active}
+        variant={(progress >= 100)? 'success' : 'warning'}
         now={progress}
       />
     </div>
