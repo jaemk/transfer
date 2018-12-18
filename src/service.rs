@@ -122,6 +122,10 @@ fn route_request(request: &rouille::Request, db_pool: db::Pool) -> Result<rouill
             handlers::serve_file("text/html", "assets/main.html")?
         },
 
+        (GET) (/status) => {
+            json!({"status": "ok", "version": env!("CARGO_PKG_VERSION")}).to_resp()?
+        },
+
         (GET)   (/api/hello)    => { json!({"message": "hey!"}).to_resp()? },
         (POST)  (/api/bye)      => { json!({"message": "bye!"}).to_resp()? },
 
