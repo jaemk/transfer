@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.4.5]
+### Added
+
+### Changed
+- update frontend to bootstrap4
+
+### Removed
+
+----
+
+## [0.4.4]
+### Added
+
+### Changed
+- don't send file names to the server
+- save filename hash instead of the filename
+
+### Removed
+
+----
+
 ## [0.4.3]
 ### Added
 - Support configurable uploads directory
