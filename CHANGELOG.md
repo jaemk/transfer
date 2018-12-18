@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.6]
+### Added
+
+### Changed
+- debounce download and delete submissions
+
+### Removed
+
+----
+
 ## [0.4.5]
 ### Added
 - add `/status` endpoint with status and app version

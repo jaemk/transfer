@@ -1,7 +1,7 @@
 [package]
 name = "transfer"
-version = "0.4.5"
-authors = ["James Kominick <james.kominick@gmail.com>"]
+version = "0.4.6"
+authors = ["James Kominick <james@kominick.com>"]
 
 [dependencies]
 clap = "2"
