@@ -2,14 +2,14 @@
 Authorization/crypto things
 
 */
-use errors::*;
+use error;
 use ring::rand::{self, SecureRandom};
 use ring::{digest, constant_time};
 use crypto::bcrypt;
 
 
 /// Generate a new 16-byte salt for use with `bcrypt`
-pub fn new_salt() -> Result<Vec<u8>> {
+pub fn new_salt() -> error::Result<Vec<u8>> {
     const SALT_SIZE: usize = 16;
     let mut salt = vec![0u8; SALT_SIZE];
     let rng = rand::SystemRandom::new();
@@ -27,13 +27,16 @@ pub fn sha256(bytes: &[u8]) -> Vec<u8> {
 
 
 /// Calculate the `bcrypt` hash of `bytes` and `salt`
-pub fn bcrypt_hash(bytes: &[u8], salt: &[u8]) -> Result<Vec<u8>> {
+pub fn bcrypt_hash(bytes: &[u8], salt: &[u8]) -> error::Result<Vec<u8>> {
     let slen = salt.len();
     let blen = bytes.len();
     if !(slen == 16 && (0 < blen && blen <= 72)) {
-        bail_fmt!(ErrorKind::InvalidHashArgs,
-                  "Expected salt size (16) and bytes size (1-72), got: salt({}), bytes({})",
-                  salt.len(), bytes.len())
+        return Err(error::helpers::internal(
+            format!(
+                "Expected salt size (16) and bytes size (1-72), got: salt({}), bytes({})",
+                salt.len(), bytes.len(),
+            )
+        ));
     }
     const COST: u32 = 10;
     const OUTPUT_SIZE: usize = 24;
@@ -44,9 +47,9 @@ pub fn bcrypt_hash(bytes: &[u8], salt: &[u8]) -> Result<Vec<u8>> {
 
 
 /// Constant time slice equality comparison
-pub fn eq(a: &[u8], b: &[u8]) -> Result<()> {
+pub fn eq(a: &[u8], b: &[u8]) -> error::Result<()> {
     constant_time::verify_slices_are_equal(a, b)
-        .map_err(|_| format_err!(ErrorKind::UnequalBytes, "Bytes differ"))?;
+        .map_err(|_| "Bytes differ")?;
     debug!("Auth OK");
     Ok(())
 }

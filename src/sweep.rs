@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use db;
 use models;
-use errors::*;
+use error::Result;
 
 
 /// Cleanup `init_upload` table, deleting expired items

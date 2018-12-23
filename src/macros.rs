@@ -2,36 +2,8 @@
 Macros
 
 For working with
-    - `error_chain`
     - `postgres`
 */
-
-
-// -------------
-// error-chain
-// -------------
-
-/// Helper for formatting Errors that wrap strings
-macro_rules! format_err {
-    ($error:expr, $str:expr) => {
-        $error(format!($str))
-    };
-    ($error:expr, $str:expr, $($arg:expr),*) => {
-        $error(format!($str, $($arg),*))
-    }
-}
-
-
-/// Helper for formatting strings with error-chain's `bail!` macro
-macro_rules! bail_fmt {
-    ($error:expr, $str:expr) => {
-        bail!(format_err!($error, $str))
-    };
-    ($error:expr, $str:expr, $($arg:expr),*) => {
-        bail!(format_err!($error, $str, $($arg),*))
-    }
-}
-
 
 // -------------
 // postgres
@@ -83,15 +55,21 @@ macro_rules! try_query_to_model {
                             $var : $arg,
                          )*
                     }),
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "{} not found", $model::table_name()),
+                    None =>
+                        return Err(
+                            error::helpers::does_not_exist(
+                                format!("{} not found", $model::table_name())
+                            )
+                        )
                 }
             }
             Err(e) => {
-                Err(Error::from(e))
+                Err(error::Error::from(e))
             }
         }
     }
 }
+
 
 
 /// Convert all rows returned into the associated model type
@@ -143,17 +121,23 @@ macro_rules! try_query_one {
     ($query:expr, $model:ident) => {
         match $query {
             Err(e) => {
-                Err(Error::from(e))
+                Err(error::Error::from(e))
             }
             Ok(rows) => {
                 let mut rows = rows.iter();
                 let record = match rows.next() {
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "{} not found", $model::table_name()),
+                    None => return Err(
+                        error::helpers::does_not_exist(format!("{} not found", $model::table_name()))),
                     Some(row) => Ok($model::from_row(row)),
                 };
                 match rows.next() {
                     None => record,
-                    Some(_) => bail_fmt!(ErrorKind::MultipleRecords, "Multiple rows returned from table: {}, expected one", $model::table_name()),
+                    Some(_) => return Err(
+                        error::helpers::multiple_records(
+                            format!("Multiple rows returned from table: {}, expected one",
+                                    $model::table_name())
+                            )
+                        )
                 }
             }
         }
@@ -180,7 +164,7 @@ macro_rules! try_query_aggregate {
             }
             Ok(rows) => {
                 match rows.iter().next() {
-                    None => bail_fmt!(ErrorKind::DoesNotExist, "Record not found"),
+                    None => Err(error::helpers::does_not_exist("Record not found")),
                     Some(row) => {
                         let val: $row_type = row.get(0);
                         Ok(val)
