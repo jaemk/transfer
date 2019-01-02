@@ -11,7 +11,7 @@ use uuid::Uuid;
 use ron;
 
 use auth;
-use errors::*;
+use error::{self, Result, Error};
 use {config_dir};
 
 
@@ -66,7 +66,7 @@ pub struct NewAuth {
     pub hash: Vec<u8>,
 }
 impl NewAuth {
-    pub fn from_pass_bytes(pass: &[u8]) -> Result<Self> {
+    pub fn from_pass_bytes(pass: &[u8]) -> error::Result<Self> {
         let salt = auth::new_salt()?;
         let sha = auth::sha256(pass);
         let hash = auth::bcrypt_hash(&sha, &salt)?;
@@ -75,7 +75,7 @@ impl NewAuth {
         })
     }
 
-    pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<Auth> {
+    pub fn insert<T: GenericConnection>(self, conn: &T) -> error::Result<Auth> {
         let stmt = "insert into auth (salt, hash) values ($1, $2) \
                     returning id, date_created";
         try_query_to_model!(conn.query(stmt, &[&self.salt, &self.hash]);
@@ -116,11 +116,11 @@ impl Auth {
 
     /// Try verifying the current `auth` record against a set of bytes, returning
     /// `Ok` if verification passes or `ErrorKind::InvalidAuth`
-    pub fn verify(&self, other_pass_bytes: &[u8]) -> Result<()> {
+    pub fn verify(&self, other_pass_bytes: &[u8]) -> error::Result<()> {
         let other_sha = auth::sha256(other_pass_bytes);
         let other_hash = auth::bcrypt_hash(&other_sha, &self.salt)?;
         auth::eq(&self.hash, &other_hash)
-            .map_err(|_| format_err!(ErrorKind::InvalidAuth, "Invalid authentication"))?;
+            .map_err(|_| error::helpers::invalid_auth("Invalid authentication"))?;
         Ok(())
     }
 }
@@ -139,7 +139,7 @@ pub struct NewInitUpload {
     pub expire_date: DateTime<Utc>,
 }
 impl NewInitUpload {
-    pub fn insert<T: GenericConnection>(self, conn: &T) -> Result<InitUpload> {
+    pub fn insert<T: GenericConnection>(self, conn: &T) -> error::Result<InitUpload> {
         let stmt = "insert into init_upload \
                     (uuid_, file_name_hash, content_hash, size_, nonce, access_password, deletion_password, download_limit, expire_date) \
                     values ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
@@ -216,7 +216,7 @@ impl InitUpload {
             .map(str::to_string)
             .ok_or_else(|| {
                 let pb = Path::to_owned(file_path.as_ref());
-                ErrorKind::PathRepr(pb)
+                error::helpers::internal(format!("invalid path: {:?}", pb))
             })?;
         Ok(NewUpload {
             uuid: self.uuid,
@@ -243,8 +243,10 @@ impl InitUpload {
         let timeout = Duration::seconds(CONFIG.upload_timeout_secs);
         let now = Utc::now();
         let cutoff = now.checked_sub_signed(timeout)
-            .ok_or_else(|| format_err!(ErrorKind::InvalidDateTimeMathOffset, "Error subtracting {} secs from {:?}",
-                                       CONFIG.upload_timeout_secs, now))?;
+            .ok_or_else(|| error::helpers::internal(
+                    format!("Error subtracting {} secs from {:?}",
+                            CONFIG.upload_timeout_secs, now)
+                    ))?;
         try_query_aggregate!(conn.query(stmt, &[&cutoff]), i64)
     }
 }
@@ -282,6 +284,7 @@ impl NewUpload {
 
 
 /// Maps to db table `upload`
+#[derive(Clone)]
 pub struct Upload {
     pub id: i32,
     pub uuid: Uuid,
@@ -477,8 +480,10 @@ impl InitDownload {
         let timeout = Duration::seconds(CONFIG.download_timeout_secs);
         let now = Utc::now();
         let cutoff = now.checked_sub_signed(timeout)
-            .ok_or_else(|| format_err!(ErrorKind::InvalidDateTimeMathOffset, "Error subtracting {} secs from {:?}",
-                                       CONFIG.download_timeout_secs, now))?;
+            .ok_or_else(|| error::helpers::internal(
+                    format!("Error subtracting {} secs from {:?}",
+                            CONFIG.download_timeout_secs, now)
+                    ))?;
         try_query_aggregate!(conn.query(stmt, &[&cutoff]), i64)
     }
 }
@@ -547,14 +552,14 @@ impl Status {
         let trans = conn.transaction()?;
         let status = Self::load(&trans);
         let status = match status {
-            Err(ref e) if e.does_not_exist() => Self::init(&trans),
+            Err(ref e) if e.is_does_not_exist() => Self::init(&trans),
             status => status,
         };
         trans.commit()?;
         status
     }
 
-    pub fn load<T: GenericConnection>(conn: &T) -> Result<Self> {
+    pub fn load<T: GenericConnection>(conn: &T) -> error::Result<Self> {
         let stmt = "select id, upload_count, total_bytes, date_modified from status";
         try_query_one!(conn.query(stmt, &[]), Status)
     }
@@ -571,7 +576,7 @@ impl Status {
     }
 
     /// Check if we can hold `n` more bytes, staying under `CONFIG.max_combined_upload_bytes`
-    pub fn can_fit<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<bool> {
+    pub fn can_fit<T: GenericConnection>(conn: &T, n_bytes: i64) -> error::Result<bool> {
         let status = Self::load(conn)?;
         Ok((status.total_bytes + n_bytes) < CONFIG.max_combined_upload_bytes)
     }

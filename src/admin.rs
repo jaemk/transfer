@@ -3,7 +3,7 @@ General Admin commands
 */
 use sweep;
 use models::CONFIG;
-use errors::*;
+use error::{self, Result};
 
 
 /// Cleanup files that no longer have an associated record in the database
@@ -13,7 +13,7 @@ pub fn sweep_files() -> Result<()> {
         let n = sweep::sweep_fs(&upload_dir)?;
         info!("** Cleaned up {} orphaned files **", n);
     } else {
-        bail!("Provided upload dir is invalid: {:?}", upload_dir);
+        return Err(error::helpers::internal(format!("Provided upload dir is invalid: {:?}", upload_dir)));
     }
     Ok(())
 }

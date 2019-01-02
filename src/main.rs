@@ -1,5 +1,4 @@
 #![recursion_limit = "1024"]
-#[macro_use] extern crate error_chain;
 #[macro_use] extern crate clap;
 extern crate migrant_lib;
 extern crate transfer;
@@ -9,16 +8,17 @@ use migrant_lib::Config;
 use migrant_lib::config::PostgresSettingsBuilder;
 use std::env;
 
-error_chain! {
-    foreign_links {
-        Io(std::io::Error);
-        Migrant(migrant_lib::Error);
-        Transfer(transfer::errors::Error);
+
+type Error = Box<std::error::Error>;
+type Result<T> = std::result::Result<T, Error>;
+
+
+pub fn main() {
+    if let Err(e) = run() {
+        eprintln!("Error: {}", e);
+        std::process::exit(1);
     }
 }
-
-
-quick_main!(run);
 
 
 fn run() -> Result<()> {
@@ -65,8 +65,8 @@ fn run() -> Result<()> {
             let port = serve_matches.value_of("port")
                 .expect("default port should be set by clap")
                 .parse::<u16>()
-                .chain_err(|| "`--port` expects an integer")?;
-            let host = if serve_matches.is_present("public") { "0.0.0.0" } else { "localhost" };
+                .map_err(|_| "`--port` expects an integer")?;
+            let host = if serve_matches.is_present("public") { "0.0.0.0" } else { "127.0.0.1" };
             transfer::service::start(&host, port)?;
         }
         _ => {
@@ -98,7 +98,7 @@ pub fn admin(matches: &ArgMatches) -> Result<()> {
                              .migration_location(proj_dir.join("migrations"))?)
                     .initialize()?;
                 match migrant_lib::search_for_settings_file(&config_dir) {
-                    None => bail!("Unable to find `Migrant.toml` even though it was just saved."),
+                    None => Err("Unable to find `Migrant.toml` even though it was just saved.")?,
                     Some(p) => p,
                 }
             }
