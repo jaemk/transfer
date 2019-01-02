@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.5.1]
+### Added
+
+### Changed
+- and backfill migration to set null `file_name_hash` fields to `0`
+    - cleanup tasks were failing
+
+### Removed
+
+----
+
+## [0.5.0]
+### Added
+
+### Changed
+- convert backend to use warp instead of rouille
+
+### Removed
+
+----
+
 ## [0.4.6]
 ### Added
 
