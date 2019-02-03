@@ -176,6 +176,13 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
     let static_file = warp::get2()
         .and(warp::fs::dir("assets"));
 
+    let not_found = warp::any()
+        .map(|| {
+            warp::http::Response::builder()
+                .status(404)
+                .body("not found")
+        });
+
     let api = index
         .or(status)
         .or(api_hello)
@@ -186,7 +193,8 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .or(api_download_init)
         .or(api_download_file)
         .or(api_download_confirm)
-        .or(static_file);
+        .or(static_file)
+        .or(not_found);
 
     let routes = api
         .with(warp::log("transfer"))
@@ -242,10 +250,12 @@ fn handle_error(err: warp::Rejection) -> std::result::Result<impl warp::Reply, w
 
     error!("Handler error: {:?}", err.cause());
     match err.status() {
-        StatusCode::NOT_FOUND | StatusCode::METHOD_NOT_ALLOWED => {
+        e @ StatusCode::NOT_FOUND | e @ StatusCode::METHOD_NOT_ALLOWED => {
+            error!("Not found: {}", e);
             Ok(warp::reply::with_status(warp::reply::json(&json!({"error": "not found"})), StatusCode::NOT_FOUND))
         },
-        StatusCode::INTERNAL_SERVER_ERROR => {
+        e @ StatusCode::INTERNAL_SERVER_ERROR => {
+            error!("Internal error: {}", e);
             Ok(warp::reply::with_status(warp::reply::json(&json!({"error": "internal error"})), StatusCode::INTERNAL_SERVER_ERROR))
         },
         _ => Err(err),
