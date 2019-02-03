@@ -202,6 +202,13 @@ def fetch_latest():
     print("** cleaning up `{}`".format(selected['name']))
     cmd('rm', '-rf', selected['name'])
 
+    # create `acme_challenge` dir for lets_encrypt
+    confirm = get_input("\nWould you like to create an acme_challenge dir (for lets-encrypt) "
+                        "for `{}`? [Y/n] ".format(tag))
+    if confirm.strip().lower() in ['y', '']:
+        acme_dir = os.path.join(tag, 'assets', 'static', 'acme_challenge')
+        cmd('mkdir', '-p', acme_dir)
+
     # symlink to `latest`
     confirm = get_input("\nWould you like to add/update the symlink `latest`->`{}`? [Y/n] ".format(tag))
     if confirm and confirm.strip().lower() != 'y':
