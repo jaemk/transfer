@@ -91,7 +91,7 @@ Packaged releases are built and packaged by travis-ci. Complete packaged release
       ```
     - Poke around the database
       ```bash
-      bin/x86_64/transfer admin database shell
+      latest/bin/transfer admin database shell
       ```
     - Setup nginx
       ```bash
