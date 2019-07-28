@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.6.1]
+### Changed
+- override config.port with the PORT env var, if present
+
 ## [0.6.0]
 ### Added
 - dockerfile for running in kube
