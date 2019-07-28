@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0]
+### Added
+- dockerfile for running in kube
+- add a default Migrant.toml that defaults to all env vars
+
+### Changed
+- the config dir is now determined from the `CONFIG_DIR` env var
+  instead of using the xdg config dir
+
 ## [0.5.1]
 ### Added
 

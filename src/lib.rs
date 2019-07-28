@@ -47,12 +47,8 @@ pub use models::CONFIG;
 pub static APPNAME: &'static str = "Transfer";
 
 pub fn config_dir() -> Result<std::path::PathBuf> {
-    // or use CONFIG_DIR env
     Ok(std::env::var("CONFIG_DIR")
         .map(|s| std::path::PathBuf::from(s))
         .unwrap_or_else(|_| std::env::current_dir().expect("unable to get current_dir"))
         .into())
-    // let xdg_dirs = xdg::BaseDirectories::with_prefix("transfer")?;
-    // let config_dir = xdg_dirs.create_config_directory("")?;
-    // Ok(config_dir)
 }

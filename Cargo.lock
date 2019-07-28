@@ -1435,7 +1435,7 @@ dependencies = [
 
 [[package]]
 name = "transfer"
-version = "0.5.2"
+version = "0.6.0"
 dependencies = [
  "chrono 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
