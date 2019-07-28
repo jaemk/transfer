@@ -73,5 +73,9 @@ COPY ./.git ./.git
 RUN git rev-parse HEAD > ./assets/__server_commit.txt
 RUN rm -rf ./.git
 
+RUN mkdir ./bin
+RUN cp ./target/release/transfer ./bin/transfer
+RUN rm -rf ./target
+
 # set the startup command to run your binary
-CMD ["./target/release/transfer", "serve"]
+CMD ["./bin/transfer", "serve"]
