@@ -27,4 +27,7 @@
     // Absolute path of upload directory
     // or relative path from the running directory
     upload_directory: "uploads",
+
+    host: "0.0.0.0",
+    port: 3300,
 )

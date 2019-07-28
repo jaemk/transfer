@@ -1,24 +1,24 @@
 /*!
 Service initialization
 */
-use std::thread;
 use std::io::Write;
+use std::thread;
 
-use env_logger;
 use chrono::Local;
-use warp::{self, Filter};
-use warp::http::StatusCode;
-use num_cpus;
+use env_logger;
 use futures_cpupool::CpuPool;
 use futures_fs::FsPool;
+use num_cpus;
+use warp::http::StatusCode;
+use warp::{self, Filter};
 
-use handlers;
-use sweep;
 use db;
-use models;
 use error::{self, Result};
+use handlers;
+use models;
+use models::CONFIG;
 use std::net::SocketAddr;
-
+use sweep;
 
 #[derive(Clone)]
 pub struct Ctx {
@@ -27,14 +27,12 @@ pub struct Ctx {
     pub fs: FsPool,
 }
 
-
 /// Initialize the `status` database table if it doesn't already exist
 fn init_status() -> Result<()> {
     let conn = db::init_conn()?;
     models::Status::init_load(&conn)?;
     Ok(())
 }
-
 
 /// Initialize things
 /// - env logger
@@ -43,22 +41,25 @@ fn init_status() -> Result<()> {
 /// - cleaning thread
 /// - server
 /// - handle errors
-pub fn start(host: &str, port: u16) -> Result<()> {
+pub fn start() -> Result<()> {
     // Set a custom logging format & change the env-var to "LOG"
     // e.g. LOG=info chatbot serve
     let mut logger = env_logger::Builder::from_env("LOG");
-    logger.format(|buf, record| {
-        writeln!(buf, "{} [{}] - [{}] -> {}",
-                 Local::now().format("%Y-%m-%d_%H:%M:%S"),
-                 record.level(),
-                 record.target(),
-                 record.args()
-        )
-    })
+    logger
+        .format(|buf, record| {
+            writeln!(
+                buf,
+                "{} [{}] - [{}] -> {}",
+                Local::now().format("%Y-%m-%d_%H:%M:%S"),
+                record.level(),
+                record.target(),
+                record.args()
+            )
+        })
         .init();
 
     // force a config load
-    let _ = models::CONFIG;
+    let _ = CONFIG;
 
     // make sure `status` record is initialized
     init_status()?;
@@ -70,13 +71,16 @@ pub fn start(host: &str, port: u16) -> Result<()> {
     let db_pool = db::init_pool(cpus as u32);
     let cpu_pool = CpuPool::new(cpus * 2);
     let fs_pool = FsPool::new(cpus);
-    let ctx = Ctx { cpu: cpu_pool, db: db_pool, fs: fs_pool };
+    let ctx = Ctx {
+        cpu: cpu_pool,
+        db: db_pool,
+        fs: fs_pool,
+    };
 
-    let addr = format!("{}:{}", host, port).parse::<SocketAddr>()?;
+    let addr = format!("{}:{}", CONFIG.host, CONFIG.port).parse::<SocketAddr>()?;
     route_and_serve(addr, ctx);
     Ok(())
 }
-
 
 fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
     // `/api`
@@ -89,7 +93,7 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
     let api_download = api_root.and(warp::path("download"));
 
     let with_ctx = warp::any().map(move || ctx.clone());
-    let with_body_stream = warp::body::content_length_limit(models::CONFIG.upload_limit_bytes as u64)
+    let with_body_stream = warp::body::content_length_limit(CONFIG.upload_limit_bytes as u64)
         .and(warp::body::stream());
     let with_body_limit = warp::body::content_length_limit(1_000_000);
 
@@ -111,14 +115,16 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(api_root)
         .and(warp::path("hello"))
         .and(warp::path::end())
-        .map(|| warp::reply::json(&json!({"message": "hello!"})));
+        .map(|| warp::reply::json(&json!({"message": "hello!"})))
+        .boxed();
 
     // `/api/upload/defaults`
     let api_defaults = warp::get2()
         .and(api_upload)
         .and(warp::path("defaults"))
         .and(warp::path::end())
-        .map(handlers::api_upload_defaults);
+        .map(handlers::api_upload_defaults)
+        .boxed();
 
     let api_upload_init = warp::post2()
         .and(api_upload)
@@ -127,7 +133,8 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(with_ctx.clone())
         .and(with_body_limit)
         .and(warp::body::json())
-        .and_then(handlers::api_upload_init);
+        .and_then(handlers::api_upload_init)
+        .boxed();
 
     let api_upload_file = warp::post2()
         .and(api_upload)
@@ -135,7 +142,8 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(with_ctx.clone())
         .and(warp::query())
         .and(with_body_stream)
-        .and_then(handlers::api_upload_file);
+        .and_then(handlers::api_upload_file)
+        .boxed();
 
     let api_upload_delete = warp::post2()
         .and(api_upload)
@@ -144,7 +152,8 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(with_ctx.clone())
         .and(with_body_limit)
         .and(warp::body::json())
-        .and_then(handlers::api_upload_delete);
+        .and_then(handlers::api_upload_delete)
+        .boxed();
 
     let api_download_init = warp::post2()
         .and(api_download)
@@ -153,7 +162,8 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(with_ctx.clone())
         .and(with_body_limit)
         .and(warp::body::json())
-        .and_then(handlers::api_download_init);
+        .and_then(handlers::api_download_init)
+        .boxed();
 
     let api_download_file = warp::post2()
         .and(api_download)
@@ -161,7 +171,8 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(with_ctx.clone())
         .and(with_body_limit)
         .and(warp::body::json())
-        .and_then(handlers::api_download);
+        .and_then(handlers::api_download)
+        .boxed();
 
     let api_download_confirm = warp::post2()
         .and(api_download)
@@ -170,18 +181,19 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(with_ctx.clone())
         .and(with_body_limit)
         .and(warp::body::json())
-        .and_then(handlers::api_download_confirm);
+        .and_then(handlers::api_download_confirm)
+        .boxed();
 
     // match everything else as a static file
-    let static_file = warp::get2()
-        .and(warp::fs::dir("assets"));
+    let static_file = warp::get2().and(warp::fs::dir("assets"));
 
     let not_found = warp::any()
         .map(|| {
             warp::http::Response::builder()
                 .status(404)
                 .body("not found")
-        });
+        })
+        .boxed();
 
     let api = index
         .or(status)
@@ -196,14 +208,10 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .or(static_file)
         .or(not_found);
 
-    let routes = api
-        .with(warp::log("transfer"))
-        .recover(handle_error);
+    let routes = api.with(warp::log("transfer")).recover(handle_error);
 
-    warp::serve(routes)
-        .run(addr);
+    warp::serve(routes).run(addr);
 }
-
 
 fn handle_error(err: warp::Rejection) -> std::result::Result<impl warp::Reply, warp::Rejection> {
     {
@@ -216,35 +224,35 @@ fn handle_error(err: warp::Rejection) -> std::result::Result<impl warp::Reply, w
             return Ok(match inner.kind() {
                 BadRequest(ref s) => {
                     // 400
-                    let body = json!({"error": s});
+                    let body = json!({ "error": s });
                     warp::reply::with_status(warp::reply::json(&body), S::BAD_REQUEST)
                 }
-               InvalidAuth(ref s) => {
-                   // 401
-                   let body = json!({"error": s});
-                   warp::reply::with_status(warp::reply::json(&body), S::UNAUTHORIZED)
-               }
-               DoesNotExist(ref s) => {
-                   // 404
-                   let body = json!({"error": s});
-                   warp::reply::with_status(warp::reply::json(&body), S::NOT_FOUND)
-               }
+                InvalidAuth(ref s) => {
+                    // 401
+                    let body = json!({ "error": s });
+                    warp::reply::with_status(warp::reply::json(&body), S::UNAUTHORIZED)
+                }
+                DoesNotExist(ref s) => {
+                    // 404
+                    let body = json!({ "error": s });
+                    warp::reply::with_status(warp::reply::json(&body), S::NOT_FOUND)
+                }
                 UploadTooLarge(ref s) => {
                     // 413
-                    let body = json!({"error": s});
+                    let body = json!({ "error": s });
                     warp::reply::with_status(warp::reply::json(&body), S::PAYLOAD_TOO_LARGE)
                 }
                 OutOfSpace(ref s) => {
                     // 503
-                    let body = json!({"error": s});
+                    let body = json!({ "error": s });
                     warp::reply::with_status(warp::reply::json(&body), S::SERVICE_UNAVAILABLE)
                 }
                 _ => {
                     // 500
                     let body = json!({"error": "something went wrong"});
                     warp::reply::with_status(warp::reply::json(&body), S::INTERNAL_SERVER_ERROR)
-                },
-            })
+                }
+            });
         }
     }
 
@@ -252,15 +260,18 @@ fn handle_error(err: warp::Rejection) -> std::result::Result<impl warp::Reply, w
     match err.status() {
         e @ StatusCode::NOT_FOUND | e @ StatusCode::METHOD_NOT_ALLOWED => {
             error!("Not found: {}", e);
-            Ok(warp::reply::with_status(warp::reply::json(&json!({"error": "not found"})), StatusCode::NOT_FOUND))
-        },
+            Ok(warp::reply::with_status(
+                warp::reply::json(&json!({"error": "not found"})),
+                StatusCode::NOT_FOUND,
+            ))
+        }
         e @ StatusCode::INTERNAL_SERVER_ERROR => {
             error!("Internal error: {}", e);
-            Ok(warp::reply::with_status(warp::reply::json(&json!({"error": "internal error"})), StatusCode::INTERNAL_SERVER_ERROR))
-        },
+            Ok(warp::reply::with_status(
+                warp::reply::json(&json!({"error": "internal error"})),
+                StatusCode::INTERNAL_SERVER_ERROR,
+            ))
+        }
         _ => Err(err),
     }
 }
-
-
-

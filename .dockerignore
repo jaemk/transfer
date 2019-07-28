@@ -1,0 +1,3 @@
+# ignore or else docker tries to copy over all the binary executables
+**/target
+**/assets/static

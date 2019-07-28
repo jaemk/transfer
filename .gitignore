@@ -1,7 +1,5 @@
 /target/
 **/*.rs.bk
-.migrant.toml
-Migrant.toml
 
 uploads/*
 !uploads/.gitkeep
@@ -11,3 +9,4 @@ assets/static/js/*.js
 assets/static/css/*.css
 assets/static/media/*
 
+**/.env.local

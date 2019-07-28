@@ -2,18 +2,17 @@
 Database models
 
 */
-use std::env;
-use std::path::{Path, PathBuf};
-use std::fs;
+use chrono::{DateTime, Duration, Utc};
 use postgres::{self, GenericConnection};
-use chrono::{DateTime, Utc, Duration};
-use uuid::Uuid;
 use ron;
+use std::env;
+use std::fs;
+use std::path::{Path, PathBuf};
+use uuid::Uuid;
 
 use auth;
-use error::{self, Result, Error};
-use {config_dir};
-
+use config_dir;
+use error::{self, Error, Result};
 
 lazy_static! {
     pub static ref CONFIG: Config = {
@@ -29,7 +28,6 @@ lazy_static! {
     };
 }
 
-
 #[derive(Debug, Deserialize)]
 pub struct Config {
     pub upload_limit_bytes: i64,
@@ -40,17 +38,19 @@ pub struct Config {
     pub download_limit_default: Option<i32>,
     pub expired_cleanup_interval_secs: u64,
     pub upload_directory: String,
+    pub host: String,
+    pub port: u16,
 }
 impl Config {
     pub fn upload_dir(&self) -> Result<PathBuf> {
         let path = PathBuf::from(&self.upload_directory);
-        if path.is_absolute() { Ok(path) }
-        else {
+        if path.is_absolute() {
+            Ok(path)
+        } else {
             Ok(env::current_dir()?.join(&self.upload_directory))
         }
     }
 }
-
 
 pub trait FromRow {
     /// Return the associated database table name
@@ -58,7 +58,6 @@ pub trait FromRow {
     /// Convert a `postgres::row::Row` into an instance
     fn from_row(row: postgres::rows::Row) -> Self;
 }
-
 
 /// For inserting a new `Auth` record
 pub struct NewAuth {
@@ -70,9 +69,7 @@ impl NewAuth {
         let salt = auth::new_salt()?;
         let sha = auth::sha256(pass);
         let hash = auth::bcrypt_hash(&sha, &salt)?;
-        Ok(Self {
-            salt, hash
-        })
+        Ok(Self { salt, hash })
     }
 
     pub fn insert<T: GenericConnection>(self, conn: &T) -> error::Result<Auth> {
@@ -84,7 +81,6 @@ impl NewAuth {
                             salt: self.salt, hash: self.hash)
     }
 }
-
 
 /// Maps to db table `auth`
 pub struct Auth {
@@ -99,10 +95,10 @@ impl FromRow for Auth {
     }
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:             row.get("id"),
-            salt:           row.get("salt"),
-            hash:           row.get("hash"),
-            date_created:   row.get("date_created"),
+            id: row.get("id"),
+            salt: row.get("salt"),
+            hash: row.get("hash"),
+            date_created: row.get("date_created"),
         }
     }
 }
@@ -124,7 +120,6 @@ impl Auth {
         Ok(())
     }
 }
-
 
 /// For initializing a new `InitUpload` record
 pub struct NewInitUpload {
@@ -156,7 +151,6 @@ impl NewInitUpload {
     }
 }
 
-
 /// Maps to db table `init_upload`
 pub struct InitUpload {
     pub id: i32,
@@ -177,17 +171,17 @@ impl FromRow for InitUpload {
     }
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:                 row.get("id"),
-            uuid:               row.get("uuid_"),
-            file_name_hash:     row.get("file_name_hash"),
-            content_hash:       row.get("content_hash"),
-            size:               row.get("size_"),
-            nonce:              row.get("nonce"),
-            access_password:    row.get("access_password"),
-            deletion_password:  row.get("deletion_password"),
-            download_limit:     row.get("download_limit"),
-            expire_date:        row.get("expire_date"),
-            date_created:       row.get("date_created"),
+            id: row.get("id"),
+            uuid: row.get("uuid_"),
+            file_name_hash: row.get("file_name_hash"),
+            content_hash: row.get("content_hash"),
+            size: row.get("size_"),
+            nonce: row.get("nonce"),
+            access_password: row.get("access_password"),
+            deletion_password: row.get("deletion_password"),
+            download_limit: row.get("download_limit"),
+            expire_date: row.get("expire_date"),
+            date_created: row.get("date_created"),
         }
     }
 }
@@ -242,15 +236,15 @@ impl InitUpload {
                     select count(*) from deleted";
         let timeout = Duration::seconds(CONFIG.upload_timeout_secs);
         let now = Utc::now();
-        let cutoff = now.checked_sub_signed(timeout)
-            .ok_or_else(|| error::helpers::internal(
-                    format!("Error subtracting {} secs from {:?}",
-                            CONFIG.upload_timeout_secs, now)
-                    ))?;
+        let cutoff = now.checked_sub_signed(timeout).ok_or_else(|| {
+            error::helpers::internal(format!(
+                "Error subtracting {} secs from {:?}",
+                CONFIG.upload_timeout_secs, now
+            ))
+        })?;
         try_query_aggregate!(conn.query(stmt, &[&cutoff]), i64)
     }
 }
-
 
 /// For initializing a new `Upload` record
 pub struct NewUpload {
@@ -282,7 +276,6 @@ impl NewUpload {
     }
 }
 
-
 /// Maps to db table `upload`
 #[derive(Clone)]
 pub struct Upload {
@@ -306,19 +299,19 @@ impl FromRow for Upload {
     }
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:                 row.get("id"),
-            uuid:               row.get("uuid_"),
-            content_hash:       row.get("content_hash"),
-            size:               row.get("size_"),
-            file_name_hash:     row.get("file_name_hash"),
-            file_path:          row.get("file_path"),
-            nonce:              row.get("nonce"),
-            access_password:    row.get("access_password"),
-            deletion_password:  row.get("deletion_password"),
-            download_limit:     row.get("download_limit"),
-            expire_date:        row.get("expire_date"),
-            deleted:            row.get("deleted"),
-            date_created:       row.get("date_created"),
+            id: row.get("id"),
+            uuid: row.get("uuid_"),
+            content_hash: row.get("content_hash"),
+            size: row.get("size_"),
+            file_name_hash: row.get("file_name_hash"),
+            file_path: row.get("file_path"),
+            nonce: row.get("nonce"),
+            access_password: row.get("access_password"),
+            deletion_password: row.get("deletion_password"),
+            download_limit: row.get("download_limit"),
+            expire_date: row.get("expire_date"),
+            deleted: row.get("deleted"),
+            date_created: row.get("date_created"),
         }
     }
 }
@@ -361,12 +354,12 @@ impl Upload {
                     from upload \
                     where (expire_date <= $1 and deleted = false) \
                     or id in \
-                        (with dl_counts as \
-                            (select upload, min(download_limit) as download_limit, count(*) \
-                                from download join upload on (upload.id = download.upload) \
-                                where deleted = false \
-                                group by upload) \
-                            select upload from dl_counts where count >= download_limit)";
+                    (with dl_counts as \
+                    (select upload, min(download_limit) as download_limit, count(*) \
+                    from download join upload on (upload.id = download.upload) \
+                    where deleted = false \
+                    group by upload) \
+                    select upload from dl_counts where count >= download_limit)";
         let now = Utc::now();
         try_query_vec!(conn.query(stmt, &[&now]), Upload)
     }
@@ -384,7 +377,6 @@ impl Upload {
     }
 }
 
-
 /// Download type (usage) for `InitDownload`s
 #[derive(Debug, Eq, PartialEq)]
 pub enum DownloadType {
@@ -400,7 +392,6 @@ impl DownloadType {
         }
     }
 }
-
 
 /// For initializing a new `InitDownload` record
 pub struct NewInitDownload {
@@ -421,7 +412,6 @@ impl NewInitDownload {
     }
 }
 
-
 /// Maps to db table `init_download`
 pub struct InitDownload {
     pub id: i32,
@@ -437,11 +427,11 @@ impl FromRow for InitDownload {
 
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:             row.get("id"),
-            uuid:           row.get("uuid_"),
-            usage:          row.get("usage"),
-            upload:         row.get("upload"),
-            date_created:   row.get("date_created"),
+            id: row.get("id"),
+            uuid: row.get("uuid_"),
+            usage: row.get("usage"),
+            upload: row.get("upload"),
+            date_created: row.get("date_created"),
         }
     }
 }
@@ -470,24 +460,26 @@ impl InitDownload {
 
     /// Check if download initializer is still valid
     pub fn still_valid(&self, dt: &DateTime<Utc>) -> bool {
-        dt.signed_duration_since(self.date_created) <= Duration::seconds(CONFIG.download_timeout_secs)
+        dt.signed_duration_since(self.date_created)
+            <= Duration::seconds(CONFIG.download_timeout_secs)
     }
 
     /// Try deleting all `init_download` records that are older than the current `CONFIG.download_timeout_secs`
     pub fn clear_outdated<T: GenericConnection>(conn: &T) -> Result<i64> {
-        let stmt = "with deleted as (delete from init_download where date_created < $1 returning 1) \
-                    select count(*) from deleted";
+        let stmt =
+            "with deleted as (delete from init_download where date_created < $1 returning 1) \
+             select count(*) from deleted";
         let timeout = Duration::seconds(CONFIG.download_timeout_secs);
         let now = Utc::now();
-        let cutoff = now.checked_sub_signed(timeout)
-            .ok_or_else(|| error::helpers::internal(
-                    format!("Error subtracting {} secs from {:?}",
-                            CONFIG.download_timeout_secs, now)
-                    ))?;
+        let cutoff = now.checked_sub_signed(timeout).ok_or_else(|| {
+            error::helpers::internal(format!(
+                "Error subtracting {} secs from {:?}",
+                CONFIG.download_timeout_secs, now
+            ))
+        })?;
         try_query_aggregate!(conn.query(stmt, &[&cutoff]), i64)
     }
 }
-
 
 /// For initializing a new `Download` record
 pub struct NewDownload {
@@ -503,7 +495,6 @@ impl NewDownload {
     }
 }
 
-
 /// Maps to db table `download`
 pub struct Download {
     pub id: i32,
@@ -517,13 +508,12 @@ impl FromRow for Download {
 
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:             row.get("id"),
-            upload:         row.get("upload"),
-            date_created:   row.get("date_created"),
+            id: row.get("id"),
+            upload: row.get("upload"),
+            date_created: row.get("date_created"),
         }
     }
 }
-
 
 /// Maps to db table `status`
 #[allow(dead_code)]
@@ -539,10 +529,10 @@ impl FromRow for Status {
     }
     fn from_row(row: postgres::rows::Row) -> Self {
         Self {
-            id:             row.get("id"),
-            upload_count:   row.get("upload_count"),
-            total_bytes:    row.get("total_bytes"),
-            date_modified:  row.get("date_modified"),
+            id: row.get("id"),
+            upload_count: row.get("upload_count"),
+            total_bytes: row.get("total_bytes"),
+            date_modified: row.get("date_modified"),
         }
     }
 }
@@ -584,10 +574,10 @@ impl Status {
     /// Increment `status` record count and running total of uploaded bytes
     pub fn inc_upload<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<Self> {
         let stmt = "with updated as (update status set \
-                                        upload_count = upload_count + 1, \
-                                        total_bytes = total_bytes + $1, \
-                                        date_modified = $2 \
-                                        returning id, upload_count, total_bytes) \
+                    upload_count = upload_count + 1, \
+                    total_bytes = total_bytes + $1, \
+                    date_modified = $2 \
+                    returning id, upload_count, total_bytes) \
                     select * from updated";
         let now = Utc::now();
         try_query_to_model!(conn.query(stmt, &[&n_bytes, &now]);
@@ -599,10 +589,10 @@ impl Status {
     /// Decrement `status` record count and running total of uploaded bytes
     pub fn dec_upload<T: GenericConnection>(conn: &T, n_bytes: i64) -> Result<Self> {
         let stmt = "with updated as (update status set \
-                                        upload_count = upload_count - 1, \
-                                        total_bytes = total_bytes - $1, \
-                                        date_modified = $2 \
-                                        returning id, upload_count, total_bytes) \
+                    upload_count = upload_count - 1, \
+                    total_bytes = total_bytes - $1, \
+                    date_modified = $2 \
+                    returning id, upload_count, total_bytes) \
                     select * from updated";
         let now = Utc::now();
         try_query_to_model!(conn.query(stmt, &[&n_bytes, &now]);
@@ -611,4 +601,3 @@ impl Status {
                             date_modified: now)
     }
 }
-
