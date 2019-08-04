@@ -1,6 +1,6 @@
 [package]
 name = "transfer"
-version = "0.6.4"
+version = "0.6.5"
 authors = ["James Kominick <james@kominick.com>"]
 edition = "2018"
 
