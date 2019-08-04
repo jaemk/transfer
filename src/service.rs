@@ -145,6 +145,42 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and_then(handlers::api_upload_file)
         .boxed();
 
+    let api_upload_file_no_q = warp::post2()
+        .and(api_upload)
+        .and(warp::path::end())
+        .and(with_ctx.clone())
+        .and(with_body_stream)
+        .map(|_, _| {
+            warp::http::Response::builder()
+                .status(500)
+                .body(serde_json::to_string(&json!({"error": "no query"})).unwrap())
+        })
+        .boxed();
+
+    let api_upload_file_no_bod = warp::post2()
+        .and(api_upload)
+        .and(warp::path::end())
+        .and(with_ctx.clone())
+        .and(warp::query())
+        .map(|_, q: String| {
+            warp::http::Response::builder().status(500).body(
+                serde_json::to_string(&json!({ "error": format!("no body, just query: {}", q) }))
+                    .unwrap(),
+            )
+        })
+        .boxed();
+
+    let api_upload_file_no_bod_or_q = warp::post2()
+        .and(api_upload)
+        .and(warp::path::end())
+        .and(with_ctx.clone())
+        .map(|_| {
+            warp::http::Response::builder()
+                .status(500)
+                .body(serde_json::to_string(&json!({"error": "nothing"})).unwrap())
+        })
+        .boxed();
+
     let api_upload_delete = warp::post2()
         .and(api_upload)
         .and(warp::path("delete"))
@@ -201,6 +237,9 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .or(api_defaults)
         .or(api_upload_init)
         .or(api_upload_file)
+        .or(api_upload_file_no_q)
+        .or(api_upload_file_no_bod)
+        .or(api_upload_file_no_bod_or_q)
         .or(api_upload_delete)
         .or(api_download_init)
         .or(api_download_file)
