@@ -463,7 +463,7 @@ pub fn api_download(
     ctx: Ctx,
     download_key: DownloadKeyAccessPost,
 ) -> impl Future<Item = impl warp::Reply, Error = warp::Rejection> {
-    info!("upload started, key: {}", download_key.key);
+    info!("download started, key: {}", download_key.key);
     struct Info {
         now: DateTime<Utc>,
         download_key: DownloadKeyAccess,
