@@ -8,6 +8,7 @@ import TextField from './TextField';
 import FileField from './FileField';
 import ProgressBar from './ProgressBar';
 import { logerr } from '../utils/errors';
+import { Base64 } from 'js-base64';
 import { randomBytes, encrypt } from '../utils/crypto';
 
 
@@ -108,7 +109,7 @@ class Upload extends Component {
         this.setState({encryptProgress: 100});
         params.size = bytes.length
         axios.post('/api/upload/init', params, headers).then(resp => {
-          const file_name_b64 = btoa(file_name)
+          const file_name_b64 = Base64.encodeURI(file_name)
           const fileNameContainingKey = resp.data.key + '_' + file_name_b64
           const key = resp.data.key
           this.setState({key: fileNameContainingKey});

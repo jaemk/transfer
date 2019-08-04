@@ -9,6 +9,7 @@ import TextField from './TextField';
 import PasswordField from './PasswordField';
 import ProgressBar from './ProgressBar';
 import { logerr } from '../utils/errors';
+import { Base64 } from 'js-base64';
 import { decrypt, bytesFromHex } from '../utils/crypto';
 
 
@@ -52,7 +53,7 @@ class Download extends Component {
         this.setState({key: key});
       } else {
         const [key, encodedName] = parts;
-        const fileName = atob(encodedName);
+        const fileName = Base64.decode(encodedName);
         this.setState({
           key: key,
           encodedFileName: encodedName,
