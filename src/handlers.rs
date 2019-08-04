@@ -11,10 +11,10 @@ use tokio;
 use uuid::Uuid;
 use warp;
 
-use auth;
-use error;
-use models::{self, CONFIG};
-use service::Ctx;
+use crate::auth;
+use crate::error;
+use crate::models::{self, CONFIG};
+use crate::service::Ctx;
 
 /// Return the default configurable upload constraints
 pub fn api_upload_defaults() -> impl warp::Reply {

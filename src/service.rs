@@ -12,13 +12,13 @@ use num_cpus;
 use warp::http::StatusCode;
 use warp::{self, Filter};
 
-use db;
-use error::{self, Result};
-use handlers;
-use models;
-use models::CONFIG;
+use crate::db;
+use crate::error::{self, Result};
+use crate::handlers;
+use crate::models;
+use crate::models::CONFIG;
+use crate::sweep;
 use std::net::SocketAddr;
-use sweep;
 
 #[derive(Clone)]
 pub struct Ctx {
@@ -191,7 +191,7 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .map(|| {
             warp::http::Response::builder()
                 .status(404)
-                .body("not found")
+                .body(serde_json::to_string(&json!({"error": "not found"})).unwrap())
         })
         .boxed();
 
@@ -208,7 +208,19 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .or(static_file)
         .or(not_found);
 
-    let routes = api.with(warp::log("transfer")).recover(handle_error);
+    let logger = warp::log::custom(|info| {
+        let elap = info.elapsed();
+        let ms = (elap.as_secs() * 1_000) as f32 + (elap.subsec_nanos() as f32 / 1_000_000.);
+        info!(
+            "{} {} {} {}ms",
+            info.status().as_u16(),
+            info.method().as_str(),
+            info.path(),
+            ms,
+        );
+    });
+
+    let routes = api.with(logger).recover(handle_error);
 
     warp::serve(routes).run(addr);
 }

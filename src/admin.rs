@@ -1,10 +1,9 @@
 /*!
 General Admin commands
 */
-use sweep;
-use models::CONFIG;
-use error::{self, Result};
-
+use crate::error::{self, Result};
+use crate::models::CONFIG;
+use crate::sweep;
 
 /// Cleanup files that no longer have an associated record in the database
 pub fn sweep_files() -> Result<()> {
@@ -13,8 +12,10 @@ pub fn sweep_files() -> Result<()> {
         let n = sweep::sweep_fs(&upload_dir)?;
         info!("** Cleaned up {} orphaned files **", n);
     } else {
-        return Err(error::helpers::internal(format!("Provided upload dir is invalid: {:?}", upload_dir)));
+        return Err(error::helpers::internal(format!(
+            "Provided upload dir is invalid: {:?}",
+            upload_dir
+        )));
     }
     Ok(())
 }
-

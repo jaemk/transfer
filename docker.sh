@@ -17,5 +17,5 @@ elif [ "$cmd" = "run" ]; then
     # hint, volume required: docker volume create transferdata
     docker run --rm --init -p 3300:3300 --env-file .env.docker --mount source=transferdata,destination=/transfer/uploads jaemk/transfer:latest
 elif [ "$cmd" = "shell" ]; then
-    docker run --rm --init -p 3300:3300 --env-file .env.docker --mount source=transferdata,destination=/transfer/uploads jaemk/transfer:latest /bin/bash
+    docker run --rm --init -p 3300:3300 --env-file .env.docker --mount source=transferdata,destination=/transfer/uploads -it jaemk/transfer:latest /bin/bash
 fi

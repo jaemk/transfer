@@ -10,9 +10,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use uuid::Uuid;
 
-use auth;
-use config_dir;
-use error::{self, Error, Result};
+use crate::auth;
+use crate::config_dir;
+use crate::error::{self, Error, Result};
 
 lazy_static! {
     pub static ref CONFIG: Config = {

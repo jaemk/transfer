@@ -2,6 +2,7 @@
 name = "transfer"
 version = "0.6.2"
 authors = ["James Kominick <james@kominick.com>"]
+edition = "2018"
 
 [dependencies]
 clap = "2"
@@ -27,7 +28,7 @@ r2d2_postgres = "0.14"
 xdg = "2"
 migrant_lib = { version = "0.21", features = ["d-postgres"] }
 
-warp = "0.1"
+warp = "0.1.18"
 hyper = "0.12"
 
 futures = "0.1"
