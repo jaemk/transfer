@@ -1,5 +1,5 @@
 # build frontend
-FROM node:8
+FROM node:8 as frontend
 
 RUN mkdir /web
 WORKDIR /web
@@ -37,7 +37,7 @@ RUN rm -rf ./.git
 
 
 # build the backend
-FROM rust:1.36
+FROM rust:1.53 as backend
 
 # create a new empty shell
 RUN USER=root cargo new --bin transfer
@@ -59,22 +59,29 @@ COPY ./src ./src
 RUN rm ./target/release/deps/transfer*
 RUN cargo build --release
 
+# save git hash of this build
+COPY ./.git ./.git
+RUN git rev-parse HEAD > ./__server_commit.txt
+RUN rm -rf ./.git
+
+
+FROM debian:buster-slim
+RUN mkdir /transfer
+WORKDIR /transfer
+
 # copy all static files
+COPY ./Migrant.toml ./Migrant.toml
 COPY ./migrations ./migrations
 
 # copy frontend assets
-COPY --from=0 /web/export_assets ./assets
+COPY --from=frontend /web/export_assets ./assets
 
 # pull in configs
 COPY ./config.ron ./config.ron
 
-# save git hash of this build
-COPY ./.git ./.git
-RUN git rev-parse HEAD > ./assets/__server_commit.txt
-RUN rm -rf ./.git
-
 RUN mkdir ./bin
-RUN cp ./target/release/transfer ./bin/transfer
+COPY --from=backend /transfer/target/release/transfer ./bin/transfer
+COPY --from=backend /transfer/__server_commit.txt ./commit_hash.txt
 RUN rm -rf ./target
 
 # set the startup command to run your binary
