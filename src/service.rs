@@ -102,11 +102,24 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(warp::path::end())
         .and(warp::fs::file("assets/main.html"));
 
+    lazy_static::lazy_static! {
+        pub static ref COMMIT_HASH: String = {
+            use std::io::Read;
+            std::fs::File::open("commit_hash.txt")
+                .map(|mut f| {
+                    let mut s = String::new();
+                    f.read_to_string(&mut s).expect("Error reading commit_hash.txt");
+                    s
+                })
+                .unwrap_or_else(|_| "unknown".to_string())
+        };
+    }
+
     // `/status`
     let status = warp::get2()
         .and(warp::path("status").and(warp::path::end()))
         .map(|| {
-            let body = json!({"status": "ok", "version": env!("CARGO_PKG_VERSION")});
+            let body = json!({"status": "ok", "version": &*COMMIT_HASH});
             warp::reply::json(&body)
         });
 
@@ -178,7 +191,7 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
         .and(api_download)
         .and(warp::path("confirm"))
         .and(warp::path::end())
-        .and(with_ctx.clone())
+        .and(with_ctx)
         .and(with_body_limit)
         .and(warp::body::json())
         .and_then(handlers::api_download_confirm)
@@ -228,8 +241,7 @@ fn route_and_serve(addr: SocketAddr, ctx: Ctx) {
 fn handle_error(err: warp::Rejection) -> std::result::Result<impl warp::Reply, warp::Rejection> {
     {
         let inner = err.find_cause::<error::Error>();
-        if inner.is_some() {
-            let inner = inner.unwrap();
+        if let Some(inner) = inner {
             use error::ErrorKind::*;
             type S = StatusCode;
             error!("Handler error: {}", inner);

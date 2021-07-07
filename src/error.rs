@@ -76,11 +76,7 @@ impl Error {
     }
 
     pub fn is_does_not_exist(&self) -> bool {
-        if let self::ErrorKind::DoesNotExist(_) = self.kind() {
-            true
-        } else {
-            false
-        }
+        matches!(self.kind(), self::ErrorKind::DoesNotExist(_))
     }
 }
 
@@ -116,7 +112,7 @@ impl std::error::Error for Error {
         "transfer error"
     }
 
-    fn cause(&self) -> Option<&std::error::Error> {
+    fn cause(&self) -> Option<&dyn std::error::Error> {
         use self::ErrorKind::*;
         Some(match *self.kind() {
             Warp(ref e) => e,

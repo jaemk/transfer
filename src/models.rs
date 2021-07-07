@@ -27,9 +27,7 @@ lazy_static! {
         let mut config: Config = ron::de::from_reader(f).expect("Failed parsing config file");
         let env_port = std::env::var("PORT").unwrap_or_default();
         if !env_port.is_empty() {
-            config.port = env_port
-                .parse::<u16>()
-                .expect(&format!("invalid port: {}", env_port));
+            config.port = env_port.parse::<u16>().expect("invalid port");
         }
         config
     };

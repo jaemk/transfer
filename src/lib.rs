@@ -44,11 +44,10 @@ pub mod sweep;
 use error::Result;
 pub use models::CONFIG;
 
-pub static APPNAME: &'static str = "Transfer";
+pub static APPNAME: &str = "Transfer";
 
 pub fn config_dir() -> Result<std::path::PathBuf> {
     Ok(std::env::var("CONFIG_DIR")
-        .map(|s| std::path::PathBuf::from(s))
-        .unwrap_or_else(|_| std::env::current_dir().expect("unable to get current_dir"))
-        .into())
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|_| std::env::current_dir().expect("unable to get current_dir")))
 }

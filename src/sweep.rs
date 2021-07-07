@@ -83,7 +83,7 @@ fn sweep_files(conn: &postgres::Connection, upload_dir: &path::Path) -> Result<u
             continue;
         }
         if let Some(file_name) = path.file_name().and_then(OsStr::to_str) {
-            if file_name.starts_with(".") {
+            if file_name.starts_with('.') {
                 continue;
             }
             let uuid = Uuid::from_str(file_name)?;

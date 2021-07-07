@@ -19,7 +19,7 @@ pub type DbConn = r2d2::PooledConnection<PostgresConnectionManager>;
 pub fn connect_str() -> Result<String> {
     let config_dir_ = config_dir()?;
     let config_path = migrant_lib::search_for_settings_file(&config_dir_)
-        .ok_or_else(|| "Unable to find `Migrant.toml` config file")?;
+        .ok_or("Unable to find `Migrant.toml` config file")?;
     let config = migrant_lib::Config::from_settings_file(&config_path)
         .map_err(|_| "Failed loading `Migrant.toml`")?;
     Ok(config

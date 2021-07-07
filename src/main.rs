@@ -9,7 +9,7 @@ use migrant_lib::config::PostgresSettingsBuilder;
 use migrant_lib::Config;
 use std::env;
 
-type Error = Box<std::error::Error>;
+type Error = Box<dyn std::error::Error>;
 type Result<T> = std::result::Result<T, Error>;
 
 pub fn main() {
@@ -76,7 +76,7 @@ fn run() -> Result<()> {
 }
 
 pub fn admin(matches: &ArgMatches) -> Result<()> {
-    if let Some(_) = matches.subcommand_matches("config-dir") {
+    if matches.subcommand_matches("config-dir").is_some() {
         println!("{}", transfer::config_dir()?.display());
         return Ok(());
     }
@@ -97,7 +97,11 @@ pub fn admin(matches: &ArgMatches) -> Result<()> {
                     )
                     .initialize()?;
                 match migrant_lib::search_for_settings_file(&config_dir) {
-                    None => Err("Unable to find `Migrant.toml` even though it was just saved.")?,
+                    None => {
+                        return Err(
+                            "Unable to find `Migrant.toml` even though it was just saved.".into(),
+                        )
+                    }
                     Some(p) => p,
                 }
             }
@@ -140,7 +144,7 @@ pub fn admin(matches: &ArgMatches) -> Result<()> {
         return Ok(());
     }
 
-    if let Some(_) = matches.subcommand_matches("sweep-files") {
+    if matches.subcommand_matches("sweep-files").is_some() {
         transfer::admin::sweep_files()?;
         return Ok(());
     }

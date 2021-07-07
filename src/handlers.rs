@@ -46,7 +46,7 @@ impl UploadInitPost {
         );
         let expire_date = Utc::now()
             .checked_add_signed(lifespan)
-            .ok_or_else(|| "lifespan too large")?;
+            .ok_or("lifespan too large")?;
         let deletion_password = match self.deletion_password {
             Some(ref hex) => Some(Vec::from_hex(hex)?),
             None => None,
@@ -57,12 +57,12 @@ impl UploadInitPost {
             size: self.size as i64,
             content_hash: Vec::from_hex(&self.content_hash)?,
             access_password: Vec::from_hex(&self.access_password)?,
-            deletion_password: deletion_password,
+            deletion_password,
             download_limit: self
                 .download_limit
                 .map(|n| n as i32)
                 .or(CONFIG.download_limit_default),
-            expire_date: expire_date,
+            expire_date,
         })
     }
 }
@@ -128,7 +128,7 @@ pub fn api_upload_init(
                 None => None,
             };
             let new_init_upload = models::NewInitUpload {
-                uuid: uuid,
+                uuid,
                 file_name_hash: info.file_name_hash,
                 content_hash: info.content_hash,
                 size: info.size,
@@ -146,7 +146,7 @@ pub fn api_upload_init(
         let resp = json!({ "key": &uuid_hex });
         warp::reply::json(&resp)
     })
-    .map_err(|e| error::helpers::reject(e))
+    .map_err(error::helpers::reject)
 }
 
 /// Upload identifier
@@ -178,8 +178,8 @@ pub fn api_upload_file(
         let uuid = Uuid::from_str(&upload_key.key)
             .map_err(|_| error::helpers::does_not_exist("upload not found"))?;
         Ok(Info {
-            uuid: uuid,
-            now: now,
+            uuid,
+            now,
             upload: None,
         })
     }());
@@ -187,7 +187,7 @@ pub fn api_upload_file(
     let db_create = ctx.db.clone();
     let cpu_create = ctx.cpu.clone();
     let db_delete = ctx.db.clone();
-    let cpu_delete = ctx.cpu.clone();
+    let cpu_delete = ctx.cpu;
 
     info.and_then(move |mut info: Info| {
         cpu_create.spawn_fn(move || -> error::Result<Info> {
@@ -261,30 +261,29 @@ pub fn api_upload_file(
         // mark the upload deleted and pass along the upload-file_path to delete
         cpu_delete
             .spawn_fn(move || -> error::Result<String> {
-                match err.kind() {
-                    error::ErrorKind::UploadTooLarge(_) => match maybe_upload {
+                if let error::ErrorKind::UploadTooLarge(_) = err.kind() {
+                    match maybe_upload {
                         Some(upload) => {
                             let conn = db_delete.get()?;
                             upload.delete(&*conn)?;
                             return Ok(upload.file_path);
                         }
                         _ => unreachable!("Found UploadTooLarge error, but no Upload"),
-                    },
-                    _ => (),
+                    }
                 }
                 Err(err)
             })
             .and_then(|path| {
                 // delete the file we just created and then convert this to an error-future
                 tokio::fs::remove_file(path)
-                    .map_err(|e| error::Error::from(e))
+                    .map_err(error::Error::from)
                     .and_then(|_| {
                         futures::future::err(error::helpers::too_large("upload too large"))
                     })
             })
             // this future chain should only consist of errors at this point
             .map(|()| unreachable!("Future chain should contain only errors"))
-            .map_err(|e| error::helpers::reject(e))
+            .map_err(error::helpers::reject)
     })
 }
 
@@ -337,7 +336,7 @@ pub fn api_upload_delete(
                             }
                             Err(e) => {
                                 error!("Error deleting upload with id={}, {}", id, e);
-                                return Err(error::Error::from(e));
+                                return Err(e);
                             }
                         }
                         Ok(upload.file_path)
@@ -358,7 +357,7 @@ pub fn api_upload_delete(
             let resp = json!({"ok": "ok"});
             warp::reply::json(&resp)
         })
-        .map_err(|e| error::helpers::reject(e))
+        .map_err(error::helpers::reject)
 }
 
 /// Download identifier and access/auth password
@@ -440,7 +439,7 @@ pub fn api_download_init(
             }
             .insert(&trans)?;
             Ok(Data {
-                upload: upload,
+                upload,
                 init_download_content,
                 init_download_confirm,
             })
@@ -455,7 +454,7 @@ pub fn api_download_init(
         });
         warp::reply::json(&resp)
     })
-    .map_err(|e| error::helpers::reject(e))
+    .map_err(error::helpers::reject)
 }
 
 /// Download encrypted bytes
@@ -511,7 +510,7 @@ pub fn api_download(
         let body = hyper::Body::wrap_stream(stream);
         warp::http::Response::builder().body(body)
     })
-    .map_err(|e| error::helpers::reject(e))
+    .map_err(error::helpers::reject)
     // if request.header("x-proxy-nginx").unwrap_or("") == "true" {
     //     let upload_path = format!("/private/{}", hex::encode(upload.uuid.as_bytes()));
     //     let resp = Response::empty_400()
@@ -569,5 +568,5 @@ pub fn api_download_confirm(
         let resp = json!({"file_name_hash": hex::encode(&upload.file_name_hash)});
         warp::reply::json(&resp)
     })
-    .map_err(|e| error::helpers::reject(e))
+    .map_err(error::helpers::reject)
 }
