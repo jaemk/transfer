@@ -37,7 +37,7 @@ RUN rm -rf ./.git
 
 
 # build the backend
-FROM rust:1.53 as backend
+FROM rust:1.58.1-bullseye as backend
 
 # create a new empty shell
 RUN USER=root cargo new --bin transfer
@@ -65,7 +65,7 @@ RUN git rev-parse HEAD > ./__server_commit.txt
 RUN rm -rf ./.git
 
 
-FROM debian:buster-slim
+FROM debian:bullseye-slim
 RUN mkdir /transfer
 WORKDIR /transfer
 
